@@ -1,0 +1,14 @@
+Thrille: Thread Interposition Library and Lightweight Extensions
+
+Thrille expects the environment variable THRILLE_ROOT to be defined as the path
+to the thrille folder where you found this readme (e.g. if I checked out the
+whole Thrille project to my home directory the following command could be
+executed or put into my .bashrc to make scripts execute as expected: "export
+THRILLE_ROOT=~/thrille/trunk/thrille").
+
+A binary of the LLVM pass which instruments memory reads and writes has been
+provided in the bin directory.  The src can be found in src/LoadStore/
+directory.  To modify or change, checkout the current version of LLVM from
+their svn (currently 'svn co http://llvm.org/svn/llvm-project/llvm/trunk llvm')
+and move the LoadStore folder into the llvm/lib/Transforms/ directory and then
+edit/call make from there.

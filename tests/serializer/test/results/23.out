@@ -1,0 +1,5 @@
+Thread 0 is scheduling at a After Create (addr: 0x400f70)
+Thread 1 is scheduling at a Thread Finish (addr: 0x400e00)
+Thread 2 is scheduling at a Thread Finish (addr: 0x400e00)
+Number of Context Switches: 4
+Number of Preemptions: 0

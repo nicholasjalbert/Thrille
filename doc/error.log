@@ -1,0 +1,78 @@
+randact: 
+
+1) cause: When randomactive testing a lockrace, we would occasionally
+pause a thread on a lock acquire.  Then, at the end of the program, livelock
+prevention would kick in (randomly) and choose to unpause this thread after the
+lock had been freed.  When we did the check to determine if the thread should
+be enabled or disabled, we would detect the assertion violation (that the mutex
+was invalid) and report an error.  The problem was that this check was internal
+to the randomactive testing and therefore not reflected in the schedule, hence
+the error would not be reproducible.
+
+fix: We now check if the lock is valid when we unpause a thread waiting on a
+lock race.  If it is valid, we do the normal thing to determine lock status, if
+it is invalid, we now enable the thread (in the hopes an error schedule will be
+discovered)
+
+
+executiontracker (serializer):
+
+1)cause: On call to pthread exit, we disable thread, note that it is finished,
+schedule a new thread, and then we call the original exit.  In the original
+pthread_exit call, we were intercepting some lock and unlock calls, which would
+then cause the thread to be re-enabled and schedule more threads simultaneous
+with the one we scheduled with the exit call, destroying the serialization
+invariant.
+
+fix: Now we check before locks and after unlocks if the thread has been marked
+as finished.  If so, we don't record it being scheduled (and don't allow it to
+schedule other threads) and we allow it to execute the locks and unlocks.
+
+racedetect:
+
+1)cause: a change in the thrille interface (After*(int &,...) => After*(int, ..)) left us
+not intercepting unlocks in the race detection thriller.  This was making us miss an obvious
+race in canneal (on _keep_going in annealer_thread.cpp).
+
+fix: Updated the racethriller so it was once again overriding the proper thrille methods to intercept
+unlock (and cond wait, join, etc calls)
+
+resolved: Need a better way to do integration testing--maybe a python script?  
+
+fwdrev.py:
+
+1) cause: Using the list slicing [:] notation returns a shallow copy of a list,
+not a deep copy 
+
+symptoms: values would change randomly in objects in lists that
+I thought were not aliased 
+
+fix: using copy.deepcopy instead of slicing for
+critical components.  Added tests to fwdrev.py to isolate/reproduce failure
+before fixing it.
+
+multiexp.py
+
+1) cause: calling pthread_mutex_trylock with a destroyed mutex will
+non-deterministically cause it to return Invalid Mutex and/or cause it to
+segfault.  This resulted in the same schedule manifesting two different bugs
+and confusing internal consistency checks.
+
+fix: I have to think about a general solution to this "undefined behaviors
+actually result in undefined behaviors" issue, but for now I dynamically track
+mutexes which are destroyed and if one up for locking, I error out.
+
+executiontracker (serializer):
+
+1)cause: on certain schedules, a thread would finish and schedule another
+thread which would immediately error out (e.g. access a invalid mutex as in the
+pbzip2 bug).  There would be a race between the finishing thread unlocking the
+global serialization lock and the error thread failing the assert.  If the
+error thread unlocked the global lock as per the fail-out procedure, sometimes
+the finishing thread would lose the race and then try to unlock the global lock
+again, causing another assertion to be raised.
+
+fix: Thread Finish now uses a modified unlock method which will not raise a
+double assert if the global serializer was unlocked by an assert (this fix is
+not ideal yet).
+ 

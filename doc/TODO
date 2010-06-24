@@ -1,0 +1,23 @@
+-fwdback algorithm = sometimes we can save preemptions by not treating the last schedule point as
+a part of a block. e.g.
+
+0
+0
+0
+0
+1
+1
+0
+0
+
+-edit the create project script to handle build dependencies and auto generate
+the Makefile
+
+-__libc_start_main is called directly before main starts--can be used to filter
+out synchronization events that result from library initialization
+
+
+
+Done:
+-GOTCHA: files (relaxedlogger) using normal safe_asserts don't properly end the
+log, making the experiments think it was a segfault.

@@ -1,0 +1,7 @@
+Optimal deadlock for canneal executed as follows:
+
+./canneal 12 100 100 ../inputs/10.nets
+
+
+This bug results from a misinitialized barrier which can leave a
+thread-to-be-joined trapped on the barrier.

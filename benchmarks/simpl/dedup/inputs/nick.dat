@@ -1,0 +1,484 @@
+#include "libserializer.h"
+
+
+SerializerHandler::SerializerHandler() : Handler() {
+    dbgPrint("Starting Serializer Thriller...\n");
+    safe_mode = true;
+}
+
+SerializerHandler::~SerializerHandler() {
+    delete controller;
+    delete threadtrack;
+    dbgPrint("Ending Serializer Thriller...\n");
+}
+
+
+
+
+void SerializerHandler::AfterInitialize() {
+    mylock = new pthread_mutex_t;
+    Originals::pthread_mutex_init(mylock, NULL);
+    threadtrack = getNewThreadTracker();
+    mainthr = Originals::pthread_self();
+    thrID myself = getNewTID(&mainthr);
+    ThreadInfo::set(new TLSSerializerData(myself));
+
+    Originals::pthread_mutex_lock(mylock);
+    race = getNewRaceDetect(myself);
+    Originals::pthread_mutex_unlock(mylock);
+
+    controller = getNewExecutionTracker(myself);
+}
+
+void SerializerHandler::ThreadStart(void * (*start_routine) (void *), 
+        void * arg) {
+    thrID myself = getThrID();
+    controller->ThreadStart(myself, start_routine, arg);
+
+    Originals::pthread_mutex_lock(mylock);
+    race->ThreadStart(myself);
+    Originals::pthread_mutex_unlock(mylock);
+} 
+
+void SerializerHandler::ThreadFinish(void * (*start_routine) (void *),
+        void * status) {
+    thrID myself = getThrID();
+    controller->ThreadFinish(myself, start_routine, status);
+    Originals::pthread_mutex_lock(mylock);
+    race->ThreadFinish(myself);
+    Originals::pthread_mutex_unlock(mylock);
+}
+
+
+bool SerializerHandler::BeforeBarrierDestroy(void * ret_addr,
+        pthread_barrier_t * barrier) {
+    thrID myself = getThrID();
+    return controller->BeforeBarrierDestroy(myself, ret_addr, barrier);
+}
+
+int SerializerHandler::SimulateBarrierDestroy(void * ret_addr,
+        pthread_barrier_t * barrier) {
+    thrID myself = getThrID();
+    return controller->SimulateBarrierDestroy(myself, ret_addr, barrier);
+}
+
+
+// should push this into executiontracker, however
+// not sure how because Thrille uses pthread_once 
+// to initialize itself
+bool SerializerHandler::BeforeOnce(void * ret_addr, 
+        pthread_once_t * once, void (* param1)(void)) {
+    return true;
+}
+
+bool SerializerHandler::BeforeMutexInit(void * ret_addr,
+        pthread_mutex_t * lock, const pthread_mutexattr_t * attr) {
+    thrID myself = getThrID();
+    return controller->BeforeMutexInit(myself, ret_addr, lock, attr);
+}
+
+bool SerializerHandler::BeforeCondInit(void * ret_addr, pthread_cond_t * cond,
+        const pthread_condattr_t * attr) {
+    thrID myself = getThrID();
+    return controller->BeforeCondInit(myself, ret_addr, cond, attr);
+}
+
+
+bool SerializerHandler::BeforeSelf(void * ret_addr) {
+    thrID myself = getThrID();
+    return controller->BeforeSelf(myself, ret_addr);
+}
+
+bool SerializerHandler::BeforeAttrInit(void * ret_addr, pthread_attr_t * at) {
+    thrID myself = getThrID();
+    return controller->BeforeAttrInit(myself, ret_addr, at);
+}
+
+
+bool SerializerHandler::BeforeAttrSetscope(void * ret_addr,
+        pthread_attr_t * attr,
+        int scope) {
+    thrID myself = getThrID();
+    return controller->BeforeAttrSetscope(myself, ret_addr, attr, scope);
+}
+
+bool SerializerHandler::BeforeSemDestroy(void * ret_addr, sem_t * sem) {
+    thrID myself = getThrID();
+    return controller->BeforeSemDestroy(myself, ret_addr, sem);
+}
+
+
+int SerializerHandler::SimulateSemDestroy(void * ret_addr, sem_t * sem) {
+    thrID myself = getThrID();
+    return controller->SimulateSemDestroy(myself, ret_addr, sem);
+}
+
+bool SerializerHandler::BeforeMutexDestroy(void * ret_addr, 
+        pthread_mutex_t * lock) {
+    thrID myself = getThrID();
+    return controller->BeforeMutexDestroy(myself, ret_addr, lock);
+
+}
+
+int SerializerHandler::SimulateMutexDestroy(void * ret_addr,
+        pthread_mutex_t * lock) {
+    thrID myself = getThrID();
+    return controller->SimulateMutexDestroy(myself, ret_addr, lock);
+}
+
+void SerializerHandler::AfterMutexDestroy(void * ret_addr, int ret,
+        pthread_mutex_t * lock) {
+    thrID myself = getThrID();
+    return controller->AfterMutexDestroy(myself, ret_addr, ret, lock);
+
+}
+
+bool SerializerHandler::BeforeCondDestroy(void * ret_addr,
+        pthread_cond_t * cond) {
+    thrID myself = getThrID();
+    return controller->BeforeCondDestroy(myself, ret_addr, cond);
+}
+
+int SerializerHandler::SimulateCondDestroy(void * ret_addr,
+        pthread_cond_t * cond) {
+    thrID myself = getThrID();
+    return controller->SimulateCondDestroy(myself, ret_addr, cond);
+}
+
+bool SerializerHandler::BeforeCreate(void * ret_addr, pthread_t * param0, 
+        const pthread_attr_t * param1,
+        void *(* param2)(void *),
+        void * param3,
+        ThreadInfo * & param4) {
+
+    thrID myself = getThrID(); 
+    thrID child = getNewTID(param0);
+    param4 = new TLSSerializerData(child);
+    bool result = controller->BeforeCreate(myself,
+            child,
+            ret_addr,
+            param0,
+            param1,
+            param2,
+            param3,
+            param4);
+    Originals::pthread_mutex_lock(mylock);
+    race->BeforeCreate(myself, child);
+    Originals::pthread_mutex_unlock(mylock);
+    return result;
+}
+
+void SerializerHandler::AfterCreate(void * ret_addr, int ret_val,
+        pthread_t * param0,
+        const pthread_attr_t * param1,
+        void *(* param2)(void *),
+        void * param3) { 
+
+    thrID myself = getThrID();
+    return controller->AfterCreate(myself, 
+            ret_addr,
+            ret_val, 
+            param0,
+            param1,
+            param2,
+            param3);
+}
+
+bool SerializerHandler::BeforeJoin(void * ret_addr,
+        pthread_t thread, void** val) {
+    thrID myself = getThrID();
+    thrID target = translateHandleToTID(&thread);
+    return controller->BeforeJoin(myself, target, ret_addr, thread, val);
+}
+
+void SerializerHandler::AfterJoin(void * ret_addr, int ret,
+        pthread_t thread, void ** val) {
+    thrID myself = getThrID();
+    thrID target = translateHandleToTID(&thread);
+    Originals::pthread_mutex_lock(mylock);
+    race->AfterJoin(myself, target);
+    Originals::pthread_mutex_unlock(mylock);
+}
+
+bool SerializerHandler::BeforeMutexLock(void * ret_addr,
+        pthread_mutex_t * lock) {
+    if (controller == NULL) {
+        return  true;
+    }
+    thrID myself = getThrID();
+    return controller->BeforeMutexLock(myself, ret_addr, 
+            lock, false);
+}
+
+int SerializerHandler::SimulateMutexLock(void * ret_addr,
+        pthread_mutex_t * lock) {
+    thrID myself = getThrID();
+    return controller->SimulateMutexLock(myself, ret_addr, lock, false);
+}
+
+void SerializerHandler::AfterMutexLock(void * ret_addr, int ret,
+        pthread_mutex_t * lock) {
+    if (controller == NULL) {
+        return;
+    }
+    thrID myself = getThrID();
+    controller->AfterMutexLock(myself, ret_addr, ret, lock, false);
+    Originals::pthread_mutex_lock(mylock);
+    race->AfterMutexLock(myself, lock);
+    Originals::pthread_mutex_unlock(mylock);
+}
+
+
+bool SerializerHandler::BeforeMutexUnlock(void * ret_addr,
+        pthread_mutex_t * lock) {
+    if (controller == NULL) {
+        return  true;
+    }
+    thrID myself = getThrID();
+    Originals::pthread_mutex_lock(mylock);
+    race->BeforeMutexUnlock(myself, lock);
+    Originals::pthread_mutex_unlock(mylock);
+    return controller->BeforeMutexUnlock(myself, ret_addr, lock, false);
+}
+
+void SerializerHandler::AfterMutexUnlock(void * ret_addr, int ret_val, 
+        pthread_mutex_t * lock) {
+    if (controller == NULL) {
+        return;
+    }
+    thrID myself = getThrID();
+    return controller->AfterMutexUnlock(myself, ret_addr, ret_val,
+            lock, false);
+}
+
+bool SerializerHandler::BeforeCondWait(void * ret_addr, pthread_cond_t * cond, 
+        pthread_mutex_t * lock) {
+    thrID myself = getThrID();
+    return controller->BeforeCondWait(myself, ret_addr, cond,
+            lock);
+}
+
+int SerializerHandler::SimulateCondWait(void * ret_addr,
+        pthread_cond_t * cond, 
+        pthread_mutex_t * lock) {
+    thrID myself = getThrID();
+    return controller->SimulateCondWait(myself, ret_addr, cond,
+            lock);
+}
+
+void SerializerHandler::AfterCondWait(void * ret_addr, int ret,
+        pthread_cond_t * cond, 
+        pthread_mutex_t * lock) {
+    thrID myself = getThrID();
+    Originals::pthread_mutex_lock(mylock);
+    race->AfterCondWait(myself, cond);
+    Originals::pthread_mutex_unlock(mylock);
+}
+
+
+bool SerializerHandler::BeforeCondTimedwait(void * ret_addr,
+        pthread_cond_t * cond, 
+        pthread_mutex_t * lock, 
+        const struct timespec * time) {
+    thrID myself = getThrID();
+    return controller->BeforeCondTimedwait(myself, ret_addr, cond, lock,
+            time);
+}
+
+int SerializerHandler::SimulateCondTimedwait(void * ret_addr,
+        pthread_cond_t * cond, 
+        pthread_mutex_t * lock,
+        const struct timespec * time) {
+    thrID myself = getThrID();
+    return controller->SimulateCondTimedwait(myself, ret_addr, cond, lock,
+            time);
+}
+
+void SerializerHandler::AfterCondTimedwait(void * ret_addr, int ret,
+        pthread_cond_t * cond, 
+        pthread_mutex_t * lock, 
+        const struct timespec * time) {
+    thrID myself = getThrID();
+    Originals::pthread_mutex_lock(mylock);
+    race->AfterCondTimedwait(myself, ret, cond); 
+    Originals::pthread_mutex_unlock(mylock);
+}
+
+bool SerializerHandler::BeforeCondSignal(void * ret_addr,
+        pthread_cond_t * cond) {
+    thrID myself = getThrID();
+    bool ret = controller->BeforeCondSignal(myself, ret_addr, cond);
+    Originals::pthread_mutex_lock(mylock);
+    race->BeforeCondSignal(myself, cond);
+    Originals::pthread_mutex_unlock(mylock);
+
+    return ret;
+}
+
+int SerializerHandler::SimulateCondSignal(void * ret_addr,
+        pthread_cond_t * cond) {
+    thrID myself = getThrID();
+    return controller->SimulateCondSignal(myself, ret_addr, cond);
+}
+
+bool SerializerHandler::BeforeCondBroadcast(void * ret_addr,
+        pthread_cond_t * cond) {
+    thrID myself = getThrID();
+    bool ret = controller->BeforeCondBroadcast(myself, ret_addr, cond);
+    Originals::pthread_mutex_lock(mylock);
+    race->BeforeCondBroadcast(myself, cond);
+    Originals::pthread_mutex_unlock(mylock);
+    return ret;
+}
+
+int SerializerHandler::SimulateCondBroadcast(void * ret_addr,
+        pthread_cond_t * cond) {
+    thrID myself = getThrID();
+    return controller->SimulateCondBroadcast(myself, ret_addr, cond);
+}
+
+bool SerializerHandler::BeforeBarrierInit(void * ret_addr,
+        pthread_barrier_t * barrier,
+        const pthread_barrierattr_t * battr, unsigned count) {
+    thrID myself = getThrID();
+    return controller->BeforeBarrierInit(myself, ret_addr, barrier, 
+            battr, count);
+}
+
+bool SerializerHandler::BeforeBarrierWait(void * ret_addr,
+        pthread_barrier_t * barrier) {
+    thrID myself = getThrID();
+    return controller->BeforeBarrierWait(myself, ret_addr, barrier);
+}
+
+
+void SerializerHandler::myMemoryRead(void * ret_addr, void * addr) {
+    thrID myself = getThrID();
+    controller->myMemoryRead(myself, ret_addr, addr);
+    Originals::pthread_mutex_lock(mylock);
+    race->memoryRead(myself, ret_addr, addr);
+    Originals::pthread_mutex_unlock(mylock);
+}
+
+void SerializerHandler::myMemoryWrite(void * ret_addr, void * addr) {
+    thrID myself = getThrID();
+    controller->myMemoryWrite(myself, ret_addr, addr);
+    Originals::pthread_mutex_lock(mylock);
+    race->memoryWrite(myself, ret_addr, addr);
+    Originals::pthread_mutex_unlock(mylock);
+}
+
+bool SerializerHandler::BeforeSleep(void * ret_addr, unsigned int time) {
+    thrID myself = getThrID();
+    return controller->BeforeSleep(myself, ret_addr, time);
+}
+
+unsigned int SerializerHandler::SimulateSleep(void * ret_addr,
+        unsigned int time) {
+    thrID myself = getThrID();
+    return controller->SimulateSleep(myself, ret_addr, time);
+}
+
+bool SerializerHandler::BeforeSigwait(void * ret_addr, const sigset_t * set,
+        int * sig){
+    thrID myself = getThrID();
+    return controller->BeforeSigwait(myself, ret_addr, set, sig);
+}
+
+int SerializerHandler::SimulateSigwait(void * ret_addr, const sigset_t * set,
+        int * sig){
+    thrID myself = getThrID();
+    return controller->SimulateSigwait(myself, ret_addr, set, sig);
+}
+
+bool SerializerHandler::BeforeUsleep(void * ret_addr, useconds_t time) {
+    thrID myself = getThrID();
+    return controller->BeforeUsleep(myself, ret_addr, time);
+}
+
+int SerializerHandler::SimulateUsleep(void * ret_addr, useconds_t time) {
+    thrID myself = getThrID();
+    return controller->SimulateUsleep(myself, ret_addr, time);
+}
+
+
+bool SerializerHandler::BeforeSemWait(void * ret_addr, sem_t * sem) {
+    thrID myself = getThrID();
+    return controller->BeforeSemWait(myself, ret_addr, sem);
+}
+
+int SerializerHandler::SimulateSemWait(void * ret_addr, sem_t * sem) {
+    thrID myself = getThrID();
+    return controller->SimulateSemWait(myself, ret_addr, sem);
+}
+
+bool SerializerHandler::BeforeSemPost(void * ret_addr, sem_t * sem) {
+    thrID myself = getThrID();
+    return controller->BeforeSemPost(myself, ret_addr, sem);
+}
+
+int SerializerHandler::SimulateSemPost(void * ret_addr, sem_t * sem) {
+    thrID myself = getThrID();
+    return controller->SimulateSemPost(myself, ret_addr, sem);
+}
+
+bool SerializerHandler::BeforeSemInit(void * ret_addr, sem_t * sem,
+        int pshared, unsigned int value) {
+    thrID myself = getThrID();
+    return controller->BeforeSemInit(myself, ret_addr, sem, pshared, value);
+}
+
+
+ExecutionTracker * SerializerHandler::getNewExecutionTracker(thrID myself) {
+    return new ExecutionTracker(myself);
+}
+
+bool SerializerHandler::BeforeExit(void * ret_addr, void * arg) {
+    thrID myself = getThrID();
+    return controller->BeforeExit(myself, ret_addr, arg);
+}
+
+void SerializerHandler::SimulateExit(void * ret_addr, void * arg) {
+    thrID myself = getThrID();
+    controller->SimulateExit(myself, ret_addr, arg);
+}
+
+thrID SerializerHandler::getThrID() {
+    ThreadInfo * t = ThreadInfo::get();
+    TLSSerializerData * data = dynamic_cast<TLSSerializerData *>(t);
+    return data->id;
+}
+
+thrID SerializerHandler::getNewTID(pthread_t * id) {
+    return threadtrack->getNewTID(id);
+}
+
+thrID SerializerHandler::translateHandleToTID(pthread_t * id) {
+    return threadtrack->translateHandleToTID(id);
+}
+
+ThreadTracker * SerializerHandler::getNewThreadTracker() {
+    return new ThreadTracker();
+
+}
+
+Racer * SerializerHandler::getNewRaceDetect(thrID myself) {
+    return new Racer(myself);
+}
+
+void myMemoryRead(int iid, void * addr) {
+    SerializerHandler * myhandler = 
+        dynamic_cast<SerializerHandler *>(pHandler);
+    void * my_id = __builtin_return_address(0);
+    myhandler->myMemoryRead(my_id, addr);
+}
+
+void myMemoryWrite(int iid, void * addr) {
+    SerializerHandler * myhandler = 
+        dynamic_cast<SerializerHandler *>(pHandler);
+    void * my_id = __builtin_return_address(0);
+    myhandler->myMemoryWrite(my_id, addr);
+}
+
+
+

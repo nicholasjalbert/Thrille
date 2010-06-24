@@ -1,0 +1,22 @@
+Thrille:Starting Default thriller...
+Thrille:Starting Serializer Thriller...
+Thrille:Starting *relaxed* serializer handler...
+Logger: Relaxed Logger engaged
+Context Switch because Thread 0 hit ctxtpoint
+Thread 0 was scheduled 46 times
+Thread 1 has run out of times to be scheduled
+Thread 1 was scheduled 2 times
+Thread 2 has run out of times to be scheduled
+Thread 2 was scheduled 2 times
+Thread 3 has run out of times to be scheduled
+Thread 3 was scheduled 2 times
+Signalling: 1
+Signalling: 3
+Thread 0 has run out of times to be scheduled
+Thread 0 was scheduled 4 times
+Thread 1 has run out of times to be scheduled
+Thread 1 was scheduled 2 times
+Thread 3 has run out of times to be scheduled
+Thread 3 was scheduled 2 times
+Thrille:Ending *relaxed* serializer handler...
+Thrille: WARNING thread 2 is not finished

@@ -1,0 +1,28 @@
+A comment in the bzip shared queue mentions a lock is designed to provide
+atomicity to two sub operations.  Commenting out this overall lock results in
+the bug we get here.
+
+./bzip2smp-e1 -1 -p4 ../inputs/smallinput
+
+The optimal schedule proceeds roughly as follows:
+
+thread 0 generates an item, but doesn't put it on the queue
+thread 2 trys to pull from the queue but is forced to wait
+thread 0 puts an item on the queue and signals 2
+thread 1 swoops in a grabs the item and pauses
+thread 2 wakes up, grabs the non exsitent item and segfaults
+
+
+Optimality Double Check: The traces here are optimal in the number of context
+switches.  To make a thread read garbage and segfault, we must get it past the
+if guard of the wait if (inChunksTail == -1).  Whenever a thread pulls off the
+    queue it will set inChunksTail to -1 if the queue is empty.  Thus, we must
+    get a thread past the guard on an empty queue.  Once we do that the thread
+    will be stuck on the wait unless it is signalled, which we need thread 0
+    to do (while it is putting an item in the queue).  So we need thread 0 to
+    spawn worker threads, a worker thread to get into the critical section on
+    an empty queue, and thread 0 to signal to re-enable the worker (3 TEI).  
+    
+    To make the worker read garbage, we need another thread to pull the item
+    off the queue (4 TEI).  Finally, we actually need to read garbage and
+    segfault (5 TEI, 4 context switches).

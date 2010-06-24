@@ -1,0 +1,5 @@
+THRILLERNAME=relaxedserial
+RELAXEDSERIAL_SRC_NAMES=librelaxedserial.cpp relaxedtracker.cpp relaxedlogger.cpp
+RELAXEDSERIAL_HEADER_NAMES=librelaxedserial.h relaxedtracker.h relaxedlogger.h 
+TARGET=librelaxedserial.so
+TESTFILES=librelaxedserial.cpp

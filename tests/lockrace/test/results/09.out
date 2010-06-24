@@ -1,0 +1,4 @@
+Race: DataRaceRecord(0x400f0f, 0x400fa8)
+Race: LockRaceRecord(0x400ed6, 0x400f66)
+Data Race Events: 23
+Lock Race Events: 24

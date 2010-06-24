@@ -1,0 +1,46 @@
+To build the bug:
+-go into src/x264/
+-type make
+-run the script nick_make.sh
+-the binary x264 should now be in src/x264
+
+sparsify 1/10
+
+
+Bug description:
+
+In the file lookahead.c made the following modification:
+
+start:
+    x264_pthread_mutex_lock( &h->lookahead->ifbuf.mutex );
+    x264_pthread_mutex_lock( &h->lookahead->next.mutex );
+    x264_lookahead_shift( &h->lookahead->next, &h->lookahead->ifbuf, h->lookahead->ifbuf.i_size );
+    x264_pthread_mutex_unlock( &h->lookahead->next.mutex );
+    x264_pthread_mutex_unlock( &h->lookahead->ifbuf.mutex );
+
+
+modified:
+    x264_pthread_mutex_lock( &h->lookahead->next.mutex );
+    x264_pthread_mutex_lock( &h->lookahead->ifbuf.mutex );
+    x264_lookahead_shift( &h->lookahead->next, &h->lookahead->ifbuf, h->lookahead->ifbuf.i_size );
+    x264_pthread_mutex_unlock( &h->lookahead->ifbuf.mutex );
+    x264_pthread_mutex_unlock( &h->lookahead->next.mutex );
+
+
+Essentially reversed the order the locks are grabbed in, which can result in
+deadlock if someone else is simultaneously contending for the same locks.
+
+
+
+
+Configure to not use assembly
+
+./configure --disable-asm
+
+Edit the config.mak makefile to add debugging and get rid of the gross
+optimizations
+
+
+
+
+

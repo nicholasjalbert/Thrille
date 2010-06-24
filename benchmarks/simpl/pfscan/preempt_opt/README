@@ -1,0 +1,13 @@
+Pfscan bug: optimal number of preemptions: 1
+
+-thread 0 fill the queue and then wait (1 non)
+-thread 1 reads all but the last item in the queue, preempts in the seeded bug (1 pre)
+-thread 2 gets the last item, tries to get again and waits on empty queue (2 non)
+-thread 1 executes, finds an empty queue, oh no!
+
+
+The key to the bug is getting someone instead of 
+
+    if (qp->occupied > 0) 
+
+while there is an item, but then not take the item so the atomicity violation will occur.  This requires at least 1 preemption, as there are no blocking functions once you are within the if statement.

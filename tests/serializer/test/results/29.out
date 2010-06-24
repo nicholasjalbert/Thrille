@@ -1,0 +1,8 @@
+LOG: thread 0 is about to create thread 1
+Thread 0 is scheduling at a After Create (addr: 0x400f59) (scheduling: 0)
+Not_Context_Switch(from, to, id_addr):0:0:0x400f59
+Thread 0 is scheduling at a Before Mutex Lock (addr: 0x400f69) (scheduling: 0)
+LOG: thread 0 is about to join thread 1
+Thread 1 is scheduling at a Before Mutex Try Lock (addr: 0x400e46) (scheduling: 1)
+Thread 1 is scheduling at a Thread Finish (addr: 0x400e20) (scheduling: 0)
+Number of Context Switches: 2

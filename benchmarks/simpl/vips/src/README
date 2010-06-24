@@ -1,0 +1,6 @@
+nick-make.sh will decompress and install all necessary libraries and compile
+vips.  This script has been tested on potus (Linux 2.6.16.46-0.12-smp x86_64
+SUSE Linux) with gcc 4.1.2
+
+nick-clean.sh will delete all decompressed directories, library installs, and
+vips installs

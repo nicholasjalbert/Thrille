@@ -1,0 +1,6 @@
+Optimal number of preemptions for bzip2-- 1
+
+we must preempt 0 to get a worker into the wait (so thread 0 can wake the
+worker for the next chunk it puts in the queue).  If we run 0 non-preemptively
+it will go to the end and never wake any waiters up.  other than that we can 
+run preemptively

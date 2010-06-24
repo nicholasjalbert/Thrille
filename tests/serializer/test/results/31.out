@@ -1,0 +1,7 @@
+Thread 1 is scheduling at a Before Barrier Wait (addr: 0x400e36) (scheduling: 2)
+Thread 2 is scheduling at a Before Barrier Wait (addr: 0x400e36) (scheduling: 1)
+Thread 1 is scheduling at a Thread Finish (addr: 0x400e10) (scheduling: 0)
+Thread 2 is scheduling at a Thread Finish (addr: 0x400e10) (scheduling: 0)
+Number of Context Switches: 6
+Number of Preemptions: 1
+Number of Non-Preemptive Context Switches: 5

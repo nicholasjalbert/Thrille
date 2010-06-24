@@ -1,0 +1,10 @@
+All the pbzip2 traces are optimal with 1 preempt.
+
+for the segfaults, thread 0 must set the mutex to null to cause it to happen,
+    but if it is not preempted the program will terminate so you need
+    atleast one preempt.
+
+
+for the destroyoing a locked mutex, some thread would have to block with it locked
+    to make it 0 preempts, but that can't happen when compressing, so you need to 
+    have atleast one preempt (and 3 ctxt switches).

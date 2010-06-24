@@ -1,0 +1,9 @@
+Thrille:Starting Default thriller...
+Thrille:Starting Serializer Thriller...
+Thrille:Starting *relaxed* serializer handler...
+Relaxed Logger engaged
+Thread 0 has run out of times to be scheduled
+Thread 0 was scheduled 47 times
+Thread 1 has run out of times to be scheduled
+Thread 1 was scheduled 3 times
+ExecTracker: safe assert fail: safe_assert(timesToSchedule > timesScheduled): 

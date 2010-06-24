@@ -1,0 +1,611 @@
+THRILLE Readme
+
+Contents:
+1) Basic Setup
+2) Architecture Overview
+3) Directory Structure
+4) Simplification Example
+5) Chess Example
+6) Making your own Thriller Example
+7) FAQ
+
+------------------------------------------------------------------------------
+1) Basic Setup 
+------------------------------------------------------------------------------
+
+1) Thrille expects the environment variable $THRILLE_ROOT to be defined, if I
+unzipped the tarball in my home directory, I would execute (or put into my
+.bashrc) the following command: 
+
+export THRILLE_ROOT=~/thrille
+
+2) You should also let the linker know to look in the Thrille binary directory
+by executing (or putting in your .bashrc) the following command: 
+
+export LD_LIBRARY_PATH=$THRILLE_ROOT/bin/:$LD_LIBRARY_PATH
+
+3) You should now be able to compile the Thrillers relevant to trace
+simplification.  Run the $THRILLE_ROOT/scripts/simpl/compile.sh script.
+
+3) LLVM is required to track memory accesses performed by a program.  There are
+three parts to setting up LLVM for Thrille:
+
+        a) Getting the LLVM front-end binaries:  Thrille requires the LLVM 2.6
+        front-end binaries (e.g. llvm-gcc, llvm-g++) to be on your path
+        (binaries for most common architectures are available at
+        http://llvm.org/releases/download.html).  For example, I might download
+        the LLVM-GCC 4.2 Front End Binaries for Linux/x86_64 and unzip it in my
+        home directory (/home/nick).  I then would add the binary directory to
+        my path (and potentially my .bashrc so it will always be in my path):
+        "export PATH=$PATH:/home/nick/llvm-gcc-4.2-2.6-x86_64-linux/bin".
+
+        b) Now, once the binaries are in your path, you can run the script
+        $THRILLE_ROOT/scripts/setupLLVM.sh to do the rest of the install.
+
+        c) With this complete you can try out compiling a benchmark with LLVM.
+        For example, try running make in $THRILLE_ROOT/benchmarks/simpl/bbuf/.
+        If the compile completes with no complaints about LLVM, you have set it
+        up correctly!
+
+
+------------------------------------------------------------------------------
+2) Architecture Overview
+------------------------------------------------------------------------------
+
+Thrille uses dynamic library interposition to wrap all Pthread function calls.
+Each wrapper has a default implementation which does nothing but call the
+original pthread function.  Thrille provides handles for each function which
+allows more interesting instrumentation to be done at these calls (e.g. you can
+do processing BeforeMutexLock or AfterMutexLock).  When writing a Thriller, you
+can selecctively override these wrapper methods to implement your program
+analysis (e.g. tracking each thread's lockset by overriding the
+BeforeMutexLock and AfterMutexUnlock method).
+
+LLVM comes into the picture because we want to be able to track the program's
+use of memory, but we can't interpose on read and write operations.  Instead,
+we compile the program down to LLVM IR and then run a pass which instruments
+each load and store instruction with a call into the Thrille framework.
+
+The directory $THRILLE_ROOT/src/thrille-core/ contains the essential
+components of Thrille.  The implementations here are automatically generated
+by the scripts found in $THRILLE_ROOT/scripts/config/, and have several
+functions:
+
+    - Getting pointers to the original pthread functions (originals.h,
+    originals.cpp) 
+    
+    - Intercepting the pthread functions and providing hooks for Thrillers
+    (libpth.h, libpth.cpp) 
+        
+    - Identifying threads at runtime (threadtracker.h, threadtracker.cpp) 
+        
+    - Implementing the shared portion of the Makefile for every Thriller
+    (core.mk)
+    
+    - Implementing a dummy library which allows you to run binaries
+    instrumented with LLVM without using a Thriller (dummy.cpp).
+
+
+Originals: This class uses the C interface to the dynamic loader (dlsym) to
+    get references to the original pthread functions.  This allows us to call
+    original pthread functions from within Thrille instrumentation without
+    being ambiguous as to whether we want to call the real function or the
+    instrumented wrapper.  For example, inside a Thriller, I would write
+    Originals::pthread_mutex_lock(my_mutex) to call the uninstrumented version
+    of lock.
+
+    -originals.cpp: line 127: here we actually use dlsym to get pointers to
+    the original functions with a macro defined at the top of the file.
+
+    -originals.cpp: line 246: here we actually implement the call the original
+    function.  We check if it's null first (which can happen if we run a
+    program which does not link in pthreads) and then we just forward the call
+    to the private function pointer which we initialize on line 127.
+
+
+Libpth: This class implements the Handler class, from which every Thriller
+inherits.  This class has the interposition functions, and the default
+implementations for the handle methods (e.g. BeforeMutexLock,
+SimulateMutexLock, AfterMutexLock).  We'll look at pthread_mutex_lock to get a
+feel for how the interposition code works: 
+
+    -libpth.cpp: line 2577: this is the declaration of pthread_mutex_lock
+    which actually "causes" the interposition.  This declaration is the exact
+    same as the declaration of pthread_mutex_lock in the pthread header.
+    Thus, when we preload this library, the linker will resolve any call to
+    pthread_mutex_lock to this function (since preloaded libraries get checked
+    first).  This function checks to see if we've initialized the Handler
+    class yet and then gets the id of this function call by examining the
+    stack (__builtin_return_address). It then calls the Handler's
+    implementation of this function (in this case, thrille_mutex_lock).
+
+    -libpth.cpp: line 144:  here is the implementation of thrille_mutex_lock
+    called by the interposing function. thrille_mutex_lock is a private method
+    and thus subclasses can't override it.  However, if you look at the code
+    it calls three handles which can be overridden (BeforeMutexLock,
+    SimulateMutexLock, and AfterMutexLock).  Note the return of
+    BeforeMutexLock determines if the original function is called or  the
+    SimulateMutexLock function is called.  Essentially, to write a
+    Thriller, you subclass Handler and override the specific handles you are
+    intereseted by (Before*, Simulate*, After*).
+
+These are the essential pieces of the core.  To get a feel for how a Thriller
+looks, I'd suggested taking a look at the basic race detection Thriller, racer.
+The files $THRILLE_ROOT/src/racer/libracer.h and
+$THRILLE_ROOT/src/racer/libracer.cpp would be good places to start.
+
+
+------------------------------------------------------------------------------
+3) Thrille Directory Structure
+------------------------------------------------------------------------------
+
+In $THRILLE_ROOT, there are a number of folders:
+
+benchmarks: Most of the benchmarks have seeded bugs in them (e.g. atomicity
+violations in shared queue implementation, mis-initialized barriers, etc).
+These bugs are put in by the preprocessor--if you grep for "ERR1" you can see
+what these bugs actually look like in code.
+
+    - $THRILLE_ROOT/benchmarks/simpl/ is the path to the benchmarks used for
+    the trace simplification project (also includes benchmarks that are still a
+    "work in progress").  Benchmarks bbuf, blackscholes, bzip2, canneal,
+    ctrace, dedup, pbzip2, pfscan, streamcluster, swarm, and x264 should work
+    with thrille.
+
+    - $THRILLE_ROOT/benchmarks/simpl/common.mk contains the paths to setup
+    LLVM.  Thrille comes with the binaries needed for this and they should work
+    out of the box on potus (at least, they did when we installed it for
+    Chang-Seo).
+
+    - $THRILLE_ROOT/benchmarks/simpl/README has an example on how to run each
+    benchmark as well as some details about them.  At a high level, in each
+    benchmark directory (besides x264, which has a more complicated build
+    process) there should be a Makefile with 4 targets: 
+        - "make" builds with no instrumentation.
+        - "make llvm" builds with memory instrumentation assuming llvm 
+          is setup correctly.
+        - "make llvmerr1" builds with the seeded error and memory 
+          instrumentation.
+        - "make clean" cleans the bin and obj directory.
+
+bin: Where all the compiled Thrille libraries get placed.
+
+doc: Record of bugs found in Thrille and a smaller README. 
+
+test: Various support files for the Thrille test suite reside here.
+
+scripts: contains support scripts as well as CHESS and Tinertia implementation.
+
+    - $THRILLE_ROOT/scripts/config/* contain the scripts to automatically
+      generate the Thrille core hooking implementation.
+
+    - $THRILLE_ROOT/scripts/runfunctionaltests.py runs test scripts for 
+      the various Thrillers.
+
+    - $THRILLE_ROOT/scripts/create_new_project.py automatically generates a
+      new, empty Thriller in $THRILLE_ROOT/src/
+
+    - $THRILLE_ROOT/simpl/* contains several scripts to clean and compile the
+      Thrille components needed for CHESS and Tinertia.
+
+    - $THRILLE_ROOT/simpl/src/* contains the Tinertia and CHESS python
+      implementations.  At a high level, these scripts execute a benchmark
+      under a Thriller, read in the resulting trace, do some processing (e.g.
+      generating a search stack or applying a simplifying operation), and
+      output a new trace to be executed. common/schedule.py contains the
+      "trace" abstraction.  chess/chess.py and chess/searchstack.py make up the
+      CHESS implementation. tinertia/tinertia.py is the Tinertia
+      implementation.
+
+
+src:
+
+    - $THRILLE_ROOT/src/thrille-core/ contains the autogenerated files that are
+    the basis for every Thriller.  This folder includes functionalities such
+    as: 1) Get pointers to the original pthread functions (originals.h,
+    originals.cpp), 2) intercepting the pthread functions and providing hooks
+    for Thrillers (libpth.h, libpth.cpp), 3) Identifying threads at runtime
+    (threadtracker.h, threadtracker.cpp), 4) The shared portion of the
+    Makefile for every Thriller (core.mk), and 5) the dummy library
+    which allows you to run binaries instrumented with LLVM without using a
+    Thriller (dummy.cpp).
+
+    - $THRILLE_ROOT/src/racer/ is a fairly straightforward implementation of
+    hybrid race detection.
+
+    - $THRILLE_ROOT/src/lockrace/ is an extension of racer that considers
+    lock contentions.
+
+    - $THRILLE_ROOT/src/serializer/ is the record and replay Thriller that
+    serializes executions and tracks which threads are enabled. Tinertia and
+    CHESS are both built on extensions of this Thriller.
+
+    - $THRILLE_ROOT/src/randomschedule/ is an extension of serializer that does
+    basic randomized scheduling.
+
+    - $THRILLE_ROOT/src/randact/ is an extension of randomschedule that does
+    active testing of lock and data races.
+
+    - $THRILLE_ROOT/src/relaxedserial and $THRILLE_ROOT/src/addrserial are the
+    Thrillers that implement the variety of trace replay relaxation techniques
+    which we used in Tinertia.
+
+    - $THRILLE_ROOT/src/chessserial is a Thriller that does basic
+    non-preemptive fair scheduling used for the CHESS implementation.
+
+
+------------------------------------------------------------------------------
+4) Simplification Example
+------------------------------------------------------------------------------
+
+Note that $THRILLE_ROOT/doc/UbuLLVM contains a more advanced simplification
+example.
+
+At a high level, here is how simplification works: 
+
+-You build a program with the LLVM tools using the loadstore pass to
+instrument memory (in benchmarks/simpl, each program has a Makefile which does
+this automatically once you get LLVM and the environment set up) 
+
+-You run the program under the liblockrace.so thriller, this produces a file
+"thrille-randomactive" with a record of the races discovered.  
+
+-You run the program under the librandact.so thriller, this reads a race pair
+from the "thrille-randomactive" file and performs random active testing on it.
+This will potentially hit a bug.  When it does find a bug, the buggy execution
+trace will be found in "my-schedule" file in the directory you ran active
+testing.  
+
+-You then call the script scripts/simpl/src/tinertia/tinertia.py [start trace]
+[end trace] [program binary] [program flag] which automatically runs the
+simplification and outputs the simplified trace into [end trace].  Replay the
+end trace by copying it to thrille-relaxed-sched and using librelaxedserial.so.
+
+And now a walk through.  
+
+1) This is on potus and I have just done the basic setup at the top of this
+file.
+
+jalbert@potus:~/newthrille/thrille-2952> echo $THRILLE_ROOT
+/home/jalbert/newthrille/thrille-2952
+jalbert@potus:~/newthrille/thrille-2952> echo $LD_LIBRARY_PATH
+/home/jalbert/newthrille/thrille-2952/bin/
+jalbert@potus:~/newthrille/thrille-2952> ls
+benchmarks  bin  doc  README  scripts  src  tests
+
+
+2) Now we will clean the Thrille installation and compile the Thrillers
+pertinents to CHESS and Tinertia:
+
+jalbert@potus:~/newthrille/thrille-2952> cd scripts/simpl/
+jalbert@potus:~/newthrille/thrille-2952/scripts/simpl> ./clean.sh
+jalbert@potus:~/newthrille/thrille-2952/scripts/simpl> ./compile.sh
+
+3) This will compile the pertinent thrillers.  Wait until this completes!  I
+have provided a contrived test example which segfaults on specific thread
+interleavings in $THRILLE_ROOT/benchmarks/simple-test.cpp.  First thing we want
+to do is compile this (we won't use LLVM as that will complicate this process,
+see the simpl benchmark makefiles for examples on how to use LLVM).  Run it a
+few times and it probably won't segfault:
+
+jalbert@potus:~/newthrille/thrille-2952/scripts/simpl> cd /home/jalbert/newthrille/thrille-2952/benchmarks/
+jalbert@potus:~/newthrille/thrille-2952/benchmarks> g++ -g -lpthread -o simple-test -g simple-test.cpp
+jalbert@potus:~/newthrille/thrille-2952/benchmarks> ./simple-test
+X is 3
+
+4) We will now run the lock contention and race detector:
+
+jalbert@potus:~/newthrille/thrille-2952/benchmarks> LD_PRELOAD=../bin/liblockrace.so ./simple-test
+Thrille:Starting Default thriller...
+Starting Race detection...
+Write profiling size is 5
+Read profiling size is 5
+Starting Lockrace Thriller...
+Using modified hybrid tracker
+X is 3
+Ending Lockrace Thriller...
+Races:
+Race: LockRaceRecord(0x400a0a, 0x400a42)
+Race: LockRaceRecord(0x4009d2, 0x400a42)
+Race: LockRaceRecord(0x40099a, 0x400a42)
+Race: LockRaceRecord(0x4009d2, 0x400a0a)
+Race: LockRaceRecord(0x40099a, 0x400a0a)
+Race: LockRaceRecord(0x40099a, 0x4009d2)
+
+Data Race Events: 0
+
+Lock Race Events: 25
+Ending Race detection...
+Thrille:Ending Default thriller...
+
+5) Notice we got lock race events but not data race events (because we did not
+compile with LLVM).  The lock race library will output the found races in the
+file thrille-randomactive in the directory in which you ran it.
+
+jalbert@potus:~/newthrille/thrille-2952/benchmarks> ls
+simpl  simple-test  simple-test.cpp  thrille-randomactive
+
+6) Now we run the random active testing library to see if we can get it to
+segfault.  This might take a while because the interleaving is pretty specific
+to get the segfault (i.e. the first created thread has to execute its critical section last).  After
+about 20 tries I finally witnessed a buggy run:
+
+jalbert@potus:~/newthrille/thrille-2952/benchmarks> LD_PRELOAD=../bin/librandact.so ./simple-test
+Thrille:Starting Default thriller...
+Thrille:Starting Serializer Thriller...
+Starting Random Active Testing...
+Schedule Hash ID: 0
+Thrille: Randomscheduler now defaults to scheduling at *EVERY* memory access
+Thrille: Chance of preemption set at 1/1
+NOTE: Random Active now defaults to scheduling at NO memory access points,
+if no data races are found in thrille-randomactive
+Random Active (Lock) Testing started...
+Target 1: 0x40099a, Target 2: 0x400a42
+SEGFAULT by thread 0
+Number of Context Switches: 14
+Number of Preemptions: 8
+Number of Non-Preemptive Context Switches: 6
+
+
+7) There will now be a file, my-schedule, which has the trace of the buggy
+execution:
+
+jalbert@potus:~/newthrille/thrille-2952/benchmarks> ls
+my-schedule  simpl  simple-test  simple-test.cpp  thrille-randomactive
+
+8) You can replay this file by copying it to the "thrille-sched" file and using
+the strict serializer:
+
+jalbert@potus:~/newthrille/thrille-2952/benchmarks> cp my-schedule thrille-sched
+jalbert@potus:~/newthrille/thrille-2952/benchmarks> LD_PRELOAD=../bin/libstrictserial.so ./simple-test
+Thrille:Starting Default thriller...
+Thrille:Starting Serializer Thriller...
+Starting *strict* serializer handler...
+Schedule Hash ID: 7720116363682796622
+SEGFAULT by thread 0
+Number of Context Switches: 14
+Number of Preemptions: 9
+Number of Non-Preemptive Context Switches: 5
+
+9) Note the number of preemptions and non-preemptions might change between the
+report of the random active tester and the replay--this is expected.  The total
+context switches should remain the same and the preemptions and non-preemptions
+in the replay should be constant no matter how many times you replay.  Now we
+are ready for simplification.  Move the buggy trace to somewhere that won't get
+overwritten and then invoke the simplification script (note, if you execute
+this script with no arguments it will give you a usage message):
+
+
+jalbert@potus:~/newthrille/thrille-2952/benchmarks> mv thrille-sched simplify-start
+jalbert@potus:~/newthrille/thrille-2952/benchmarks> python /home/jalbert/newthrille/thrille-2952/scripts/simpl/src/tinertia/tinertia.py simplify-start simplify-end simple-test
+Sanity check error: thread 0 segfault
+Expected error: thread 0 segfault
+
+Schedule Statistics
+Total Schedule Points: 64
+Total Threads: 5
+Context Switches: 14
+Non-Preemptive Context Switches: 6
+Preemptions: 8
+
+
+        Block Removal :
+                Schedule Points Removed: 0
+                Threads Removed: 0
+                Context Switches Removed: 3
+                Non-Preemptive Context Switches Removed: 1
+                Preemptions Removed: 2
+        Forward Consolidation2 :
+                Schedule Points Removed: 0
+                Threads Removed: 0
+                Context Switches Removed: 5
+                Non-Preemptive Context Switches Removed: 0
+                Preemptions Removed: 5
+        Backward Consolidation :
+                Schedule Points Removed: 0
+                Threads Removed: 0
+                Context Switches Removed: 1
+                Non-Preemptive Context Switches Removed: 0
+                Preemptions Removed: 1
+        Block Removal :
+                Schedule Points Removed: 0
+                Threads Removed: 0
+                Context Switches Removed: 0
+                Non-Preemptive Context Switches Removed: 0
+                Preemptions Removed: 0
+        Forward Consolidation2 :
+                Schedule Points Removed: 0
+                Threads Removed: 0
+                Context Switches Removed: 0
+                Non-Preemptive Context Switches Removed: 0
+                Preemptions Removed: 0
+        Backward Consolidation :
+                Schedule Points Removed: 0
+                Threads Removed: 0
+                Context Switches Removed: 0
+                Non-Preemptive Context Switches Removed: 0
+                Preemptions Removed: 0
+Start Schedule:
+Total Schedule Points: 64
+Total Threads: 5
+Context Switches: 14
+Non-Preemptive Context Switches: 6
+Preemptions: 8
+
+
+Simplified Schedule:
+Total Schedule Points: 64
+Total Threads: 5
+Context Switches: 5
+Non-Preemptive Context Switches: 5
+Preemptions: 0
+
+
+Number of Iterations: 2
+Number of Executions: 28
+Time (sec): 1.06056690216
+Number of empty schedules: 369
+Number of generated schedules which show our bug: 20
+Number of generated schedules which show a different bug: 0
+Number of generated schedules which show no bug: 8
+
+
+10) simplify-end now contains the simplified script.  We can replay the
+simplified buggy trace by copying it to thrille-relaxed-sched (the script outputs
+the trace in a different format than the input) and using the relaxed testing
+thriller:
+
+jalbert@potus:~/newthrille/thrille-2952/benchmarks> cp simplify-end thrille-relaxed-sched
+jalbert@potus:~/newthrille/thrille-2952/benchmarks> LD_PRELOAD=../bin/librelaxedtester.so ./simple-test
+Thrille:Starting Default thriller...
+Thrille:Starting Serializer Thriller...
+Starting relaxed *TESTER* handler...
+Schedule Hash ID: 0
+Closing log
+Schedule Hash ID: 12829435254382273283
+Logger: Relaxed Logger engaged
+Closing log
+Schedule Hash ID: 12829435254382273283
+Logger: Relaxed Logger engaged
+SEGFAULT by thread 0
+Number of Context Switches: 5
+Number of Preemptions: 0
+Number of Non-Preemptive Context Switches: 5
+
+------------------------------------------------------------------------------
+5) CHESS Example
+------------------------------------------------------------------------------
+
+
+This jumps off where the last walk through ended.  We can also use CHESS to
+check our program as follows:
+
+1) Remove all the simplification traces:
+
+jalbert@potus:~/newthrille/thrille-2952/benchmarks> rm my-schedule simplify-end simplify-start thrille-randomactive thrille-relaxed-sched
+
+2) Use the chess python script as follows (note, if you execute this script
+with no arguments it will give you a usage message).  Here we made a
+directory for any buggy traces CHESS finds and then CHESS check with a
+preemption bound of 0.  We find the segfault after 44 executions and then
+CHESS terminates (we could also continue CHESS search if we desired):
+
+jalbert@potus:~/newthrille/thrille-2952/benchmarks> mkdir chess_schedules
+jalbert@potus:~/newthrille/thrille-2952/benchmarks> python /home/jalbert/newthrille/thrille-2952/scripts/simpl/src/chess/chess.py 0 none chess_schedules simple-test
+Chess Checker Initialized
+testing: /home/jalbert/newthrille/thrille-2952/benchmarks/simple-test
+params: []
+addrlist []
+preemption bound: 0
+results directory:
+/home/jalbert/newthrille/thrille-2952/benchmarks/chess_schedules
+Error ( thread 0 segfault ) found in 44 executions
+
+Chess check with preemption bound 0 was *NOT* completed, hit execution bound
+at 44 executions
+
+Chess Checking Results:
+        Total Time: 1.01120710373 secs
+        Found Errors:
+                thread 0 segfault in 44 iterations.
+
+
+------------------------------------------------------------------------------
+6) Making your own Thriller Example
+------------------------------------------------------------------------------
+
+Finally, making a new Thriller is very easy.  Again, this assumes you've done
+the basic setup at the top of this file.
+
+1) The script $THRILLE_ROOT/scripts/create_new_project.py will automatically
+set up the directory for you.  We will make a Thriller called emptythriller:
+
+jalbert@potus:~/newthrille/thrille-2952/scripts> cd /home/jalbert/newthrille/thrille-2952/scripts/
+jalbert@potus:~/newthrille/thrille-2952/scripts> python create_new_project.py emptythriller
+Makefile done...
+Library header done...
+Library body done...
+Create handler done...
+Custom function interposition done
+Unit test done...
+
+2) We can now check out our new thriller by going into the source directory.
+   This will contain a skeleton Thriller which will compile.  You can start
+   overriding pthread method handles (e.g. BeforeMutexLock) if you would like.
+   We will just compile and run the empty Thriller.
+
+jalbert@potus:~/newthrille/thrille-2952/scripts> cd /home/jalbert/newthrille/thrille-2952/src/emptythriller/
+jalbert@potus:~/newthrille/thrille-2952/src/emptythriller> make
+
+3) Wait for make to complete and you can then use the empty thriller:
+
+jalbert@potus:~/newthrille/thrille-2952/benchmarks> cd /home/jalbert/newthrille/thrille-2952/benchmarks/
+jalbert@potus:~/newthrille/thrille-2952/benchmarks> LD_PRELOAD=../bin/libemptythriller.so ./simple-test
+Thrille:Starting Default thriller...
+Starting Emptythriller Thriller...
+X is 3
+Ending Emptythriller Thriller...
+Thrille:Ending Default thriller...
+
+4) Check out other Thrillers to get a feel for how to do the method overriding.
+   The racer Thriller is probably a good one to start looking at.
+
+
+------------------------------------------------------------------------------
+7) FAQ
+------------------------------------------------------------------------------
+
+1) How do I map a schedule back to source code?
+
+Thrille uses the GCC function __builtin_return_address(0) to statically
+identify memory and synchronization events.  Looking in a schedule file (in
+this example my-schedule generated by running a schedule fuzzer on the VIPS
+benchmark), the schedule will be specified by the following format:
+
+SCHED
+chosen:0
+caller:0
+typstr:After_Mutex_Unlock
+idaddr:0x438612
+enable:0,
+
+The idaddr it the identifier of the statement that generated this event.  To
+map it to source, use the binutil addr2line (note: your binary must have been
+compiled with debugging information for this to work).  e.g.:
+
+jalbert@potus:~/thrille/benchmarks/simpl/vips/bin> addr2line -e vips 0x438612
+/thrille/benchmarks/simpl/vips/src/vips-7.20.0/libvips/iofuncs/init.c:185
+
+This identification scheme can fail when a dynamically loaded library uses
+non-trivial threading (because the library will be mapped to different parts
+of a program's memory in different executions)--try statically linking the
+offending library.  Also, the script
+$THRILLE_ROOT/scripts/simpl/generateScheduleInfo.py will automatically perform
+the binutil call on every address in a schedule--execute the script with no
+arguments to get usage information.
+
+
+2) How do I change what functions Thrille wraps?
+
+The implementation in $THRILLE_ROOT/src/thrille-core/ determines which
+function calls Thrille will intercept.  The script
+$THRILLE_ROOT/scripts/config/corecodegen.py will automatically regenerate the
+Thrille core classes.  
+
+The marshalled python dictionary found at
+$THRILLE_ROOT/scripts/config/pthreaddict contains the function signatures of
+each function used by the corecodegen.py script to determine which functions
+it should intercept. The dictionary format is:
+
+ "function name":["return type", "arg 1 type", "arg 2 type", ..., "arg n type"]
+
+To modify which function calls Thrille intercepts, one can unmarshal the
+dictionary in python, add or delete the functions in question, write the
+dictionary back out, execute the corecodegen.py script, and then recompile.
+
+
+
+
+
+
+

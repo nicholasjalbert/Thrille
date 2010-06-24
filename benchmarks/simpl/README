@@ -1,0 +1,544 @@
+Benchmarks for Schedule Simplification
+
+every make files has three targets:
+ -make llvm: llvm build with memory instrumentation
+ -make llvmerr1: llvm build with (if needed) a seeded error
+ -make clean
+
+
+pbzip2:
+./pbzip2 -f -k -p3 -o ../input/smallinput
+    -make sure lock race profiling >20 wr, rds
+
+examined exp/11142009_rand/run005/ for the code example in the paper
+
+x264:
+./x264 --quiet --qp 20 --partitions b8x8,i4x4 --ref 5 --direct auto --weightb --mixed-refs --no-fast-pskip --me umh --subme 7 --analyse 8x8.i4x4 --threads 4 -o ../obj/eledream.264 ../inputs/eledream_640x360_8.y4m 
+
+examined exp/11142009_rand/run020/ for the code example in the paper
+
+facesim:
+
+ctrace:
+./ctrace 2
+   -make sure no sparsify
+
+canneal
+./canneal 12 100 100 ../inputs/10.nets
+
+bbuf
+./bb
+
+dedup
+./dedup -c -p -f -t 3 -i ../inputs/nick.dat -o /dev/null
+
+pfscan 
+./pfscan -n3 jalbert /home/jalbert/pfscan_test/
+
+Streamcluster:
+./streamcluster 2 2 1 10 10 5 none ../obj/output.txt 3
+    -sparsify schedule points 1/100
+
+Blackscholes:
+./blackscholes 8 32
+
+swarm (still oh so slow):
+./swarm
+    -chanceOfPreempt = 10
+    -sparsfy 1/90
+
+bzip2:
+./bzip2smp -1 -p4 ../inputs/smallinput
+    -lockrace with wr,rds at 5 on tinyinput
+
+swaptions:
+./swaptions -ns 6 -sm 5 -nt 1
+./swaptions -n2 16 -sm 5000 -nt 1
+
+
+
+vips:
+./vips im_benchmark ../inputs/barbados_256x288.v ../obj/output.v
+    -lockrace with wr,rds at 40
+
+(n.b. vips may complain about a problem with gxx_personality_v0 causing
+overflow.  As far as I can tell, this only occurs on potus (and not, say,
+ubuntu) is benign with respect to the benchmark)
+
+
+
+ERROR DESCRIPTIONS:
+
+
+bzip2:
+
+Program: Parallel bzip similar to pbzip2 (but the author claims less
+amateurish)
+
+Error: There was a comment in the worker thread method about how a larger mutex
+had to be used to ensure atomicity between two smaller mutexes.  In the error
+version, I remove the call to the larger mutex.
+
+Error (More detail): it used to be the case when a worker thread discovered an
+empty queue, it would wait *while* still holding the larger mutex.  Without the
+larger mutex, other threads can rampage through the "get chunk out of queue
+section" and potential set the inChunksTail pointer (i.e. the pointer to the
+next chunk in the queue) to -1 to represent an empty queue.  Unfortunately, the
+wait is protected by a conditional, not a while loop, and if the thread on the
+wait wakes up, it doesn't check if the queue is empty before acquiring the
+inChunksTail item (which is -1 in this case, aka garbage).  Segfault happens
+thereafter.  This used to be prevented by the larger mutex because ONLY the
+thread waiting would have a shot at the chunk just put on the queue.
+
+Comment: In order to make it easy to run mulitple tests, I made bzip2smp take a
+command line argument input file and just output to /dev/null.  Before it
+required input piped from stdin and piped output to stdout (wreaked havoc with
+my scripts).
+
+Comment 2: I compiled the compress.c bzip2lib.c with gcc instead of llvm
+because racedetection was impractical with those libraries hooked, even on
+(very) small inputs.  There are no pthread_ functions contained in those files.
+
+
+dedup:
+
+Program: From PARSEC.  Compresses a data stream using a pipelines program
+model.
+
+Error: Inserted a lock release and get inside a shared queue method which can
+result in atomicity violations and segfaults if the queue becomes to malformed. 
+
+Optimal Trace Description:  We pre-enqueue one object in the anchor_que.  We
+let one anchor_queue-thread dequeue from this queue.  This thread  gets through
+the sanity checks and pauses at the atomicity violation.  We let another
+anchor_que-thread complete a dequeue.  We then let the paused
+anchor_queue-thread go and dequeue garbage.  When this garbage is
+dereffed-segfault.
+
+
+                                                                                               
+pfscan:
+
+Program:  A parallel file scanner (mimics find + grep) that has a tendency to
+segfault.
+                                                                                           
+Error:  added an lock/unlock combo between a condition check and pulling
+something off a queue.  This can lead to an atomicity violation on certain
+schedules and foobar-ing the queue.  Because of a double-free which causes a
+deadlock in glibc, I added an assertion that, after the lock is reacquired, the
+condition is still true (i.e. there is still something in the queue that your
+trying to get an item out of).  If it's not true we crash out.
+
+
+Comment:  For some reason, we are doing much better than last time, this is
+potentially a combination of several factors: 
+
+a) this segfault happens sooner in the trace so the work sharing queue affect
+doesn't kill us 
+
+b) updates to the experimental framework are more permissive in allowed
+schedules 
+
+c) inputs are different, which results in different failure
+
+Comment 2: Actually, we are doing much better than the "fake" error from last
+time of termination of main thread before child threads--which is when the task
+queue pattern kills us.  There is less of that here so it's easier...
+
+blackscholes:
+
+Program:  From PARSEC.  Calculates the prices for a portfolio of European
+options analytically with the Black-Scholes PDE.
+
+Error:  Not much interesting parallelism happening here especially because I
+can't really tell if there's output or if it is just designed to spin the cpu.
+Best error I could come up with was to make the join with all threads only join
+one thread, and mis-initialize the barrier (off by one) so if one were to get
+unlucky, a deadlock would result (if the thread you are joining is the one left
+on the barrier).
+
+ctrace:
+
+Program: From Inspect.  It appears to implement a network protocol and test it
+by spawning a thread and communicating over a pipe (I think) with each other.
+
+Error:  The threads share a hash structure, and readers/writers are separated
+by a semaphore.  I removed the lock around around the hash entrance functions,
+which can result in deadlock on racy accesses.  
+
+NOTE: ++_hashreads and --_hashreads are NOT atomic when compiled with llvm
+
+
+canonical bug trace:
+
+//thread 0 is reading the hash table, thread 1 is not, _hashreads
+== 1
+
+(0, HASH_READ_EXIT)
+(0, pthread_mutex_lock(&_hashmutex))
+(0, r1 = _hashreads)   // decrement is not atomic (by inspection of LLVM IR)
+(0, r1 = r1 - 1)       // r1 == 0
+
+(1, HASH_READ_ENTER)   // context switch
+(1, if (!_hashreads))  // _hashreads still == 1
+(1, r2 = _hashreads)
+(1, r2 = r2 + 1)
+(1, _hashreads = r2)   // _hashreads == 2
+
+(0, _hashreads = r1)   // store thread 0's stale value into hash reads
+(0, if(!_hashreads)
+(0, sem_post(&_hashsem))
+(0, pthread_mutex_unlock(&_hashmutex))
+(0, HASH_READ_ENTER)
+(0, if(!_hashreads))
+
+// _hashreads is 0, so thread 0 will wait, pause 0 before it waits
+
+(1, HASH_READ_EXIT)
+(1, pthread_mutex_lock(&_hashmutex))
+(1, --_hashreads)       //_hashreads == -1
+(1, if(!_hashreads)     // if (false)
+(1, pthread_mutex_unlock(&_hashmutex))
+(1, thread finish)
+
+(0, sem_wait(&_hashsem))
+// _hashsem is now 0
+(0, _hashreads++) //_hashreads == 0
+(0, pthread_join)
+(0, TRC_REMOVE_THREAD)
+(0, int i,ret = 1)
+(0, ...)
+(0, HASH_WRITE_ENTER)
+(0, sem_wait(&_hashsem))
+
+readable log:
+Schedule Hash ID: 0
+Closing log
+Schedule Hash ID: 13563537878747891475
+Logger: Relaxed Logger engaged
+Closing log
+Schedule Hash ID: 13563537878747891475
+Logger: Relaxed Logger engaged
+	About to wait at semaphore with value 1
+	Finshed sem_wait, value is now 0
+	Posted to semaphore, value is now 1
+	About to wait at semaphore with value 1
+	Finshed sem_wait, value is now 0
+	Posted to semaphore, value is now 1
+	About to wait at semaphore with value 1
+	Finshed sem_wait, value is now 0
+11/15/09-18:38:57:src/ctrace.foobar.comb.c:1392:./ctrace-e1:                                            n=1enter foo(n=1)
+	Posted to semaphore, value is now 1
+Thread 0 is scheduling at a After Mutex Unlock (addr: /ctrace.foobar.comb.c:1257) (scheduling: 1)
+Preemption(from, to, id_addr):0:1:/ctrace.foobar.comb.c:1257
+	About to wait at semaphore with value 1
+	Finshed sem_wait, value is now 0
+	Posted to semaphore, value is now 1
+	About to wait at semaphore with value 1
+	Finshed sem_wait, value is now 0
+	Posted to semaphore, value is now 1
+	About to wait at semaphore with value 1
+	Finshed sem_wait, value is now 0
+11/15/09-18:38:57:src/ctrace.foobar.comb.c:1413:bar:                                            arg=0 bar(arg=0xafca3a6c)
+Thread 1 is scheduling at a Before Mutex Lock (addr: /ctrace.foobar.comb.c:1257) (scheduling: 0)
+Preemption(from, to, id_addr):1:0:/ctrace.foobar.comb.c:1257
+Thread 0 is scheduling at a Memory Read (addr: /ctrace.foobar.comb.c:1160) (scheduling: 1)
+Preemption(from, to, id_addr):0:1:/ctrace.foobar.comb.c:1160
+	Posted to semaphore, value is now 1
+	About to wait at semaphore with value 1
+	Finshed sem_wait, value is now 0
+	Posted to semaphore, value is now 1
+	About to wait at semaphore with value 1
+	Finshed sem_wait, value is now 0
+11/15/09-18:38:57:src/ctrace.foobar.comb.c:1423:bar:                                            Goodbye cruel world[1]Goodbye cruel world[1]
+	Posted to semaphore, value is now 1
+	About to wait at semaphore with value 1
+	Finshed sem_wait, value is now 0
+Thread 1 is scheduling at a Memory Read (addr: /ctrace.foobar.comb.c:1160) (scheduling: 0)
+Preemption(from, to, id_addr):1:0:/ctrace.foobar.comb.c:1160
+	Posted to semaphore, value is now 1
+	About to wait at semaphore with value 1
+	Finshed sem_wait, value is now 0
+11/15/09-18:38:57:src/ctrace.foobar.comb.c:1402:./ct ace-e1:                                            Hello world[1]Hello world[1]
+	Posted to semaphore, value is now 1
+	About to wait at semaphore with value 1
+	Finshed sem_wait, value is now 0
+//Thread 0 in HASH_READ_EXIT critical section
+Thread 0 is scheduling at a Memory Write (addr: /ctrace.foobar.comb.c:1170) (scheduling: 1)
+Preemption(from, to, id_addr):0:1:/ctrace.foobar.comb.c:1170
+//Thread 1 is about the HASH_READ_EXIT, wait for 0 to leave critical section
+Thread 1 is scheduling at a Before Mutex Lock (addr: /ctrace.foobar.comb.c:1170) (scheduling: 0)
+NonPreemptive_Context_Switch(from, to, id_addr):1:0:/ctrace.foobar.comb.c:1170
+//Thread 0 posts and exits
+	Posted to semaphore, value is now 1
+	About to wait at semaphore with value 1
+//Thread 0 gets into the sem_wait in HASH_READ_ENTER
+Thread 0 is scheduling at a Before Sem Wait (addr: /ctrace.foobar.comb.c:1196) (scheduling: 1)
+Preemption(from, to, id_addr):0:1:/ctrace.foobar.comb.c:1196
+11/15/09-18:38:57:src/ctrace.foobar.comb.c:1426:bar:                                            0 bar(0x0)
+//Thread 1 enters critical section of HASH_READ_EXIT, n.b. no post because _hashreads == -1 
+Thread 1 is scheduling at a Thread Finish (addr: /ctrace.foobar.comb.c:1409) (scheduling: 0)
+NonPreemptive_Context_Switch(from, to, id_addr):1:0:/ctrace.foobar.comb.c:1409
+//Thread 0 waits, _hashsem is now 0
+	Finshed sem_wait, value is now 0
+11/15/09-18:38:57:src/ctrace.foobar.comb.c:1405:./ct ace-e1:                                            0return foo(0)
+//Thread 0 HASH_WRITE_ENTER, deadlocks!
+	About to wait at semaphore with value 0
+
+ExecTracker: safe assert fail: safe_assert(DeadlockNotDetected): 
+	function: deadlockCheck
+	file: executiontracker.cpp
+	line: 1020
+
+canneal: 
+
+Program:  From Parsec.  Simulated annealing to minimize the routing cost of a
+chip design.
+
+Error:  Off by one value for barrier initialization can result in a deadlock if
+the wrong thread gets stuck on it.
+
+boundedBuffer:
+
+Program: From Inspect benchmarks.  Multiple threads take turns producing and
+consuming in a shared buffer.
+
+Error: Put an extra lock and unlock in the get() method between the check if
+the buffer is empty and removing an item from it.  This can result in deadlock
+
+pbzip2:
+
+Program: Parallel implementation of  bzip.  Note this is on a small input so
+the shared task queue effects aren't visible (which is why we do really good on
+it right now).
+
+Error: Joins the wrong thread, so it can free mutexes before other threads are
+done with them
+
+streamcluster:
+
+Benchmark from PARSEC In progress--runs under thrille, but can't having trouble
+replaying segfaulting schedules, not sure if this is an error in thrille or
+some non-determinism I haven't captured or what.  Weird thing is that this
+worked (slowly) earlier today which is where these results are from.  I also
+need to figure out a good way to deal with really long schedules (potentially
+parametric scheduling or something similar).  I have some preliminary results
+from this one (tiny run sample of 2 successful experimental trials completed).
+
+swarm:
+
+Benchmark from Inspect.  Implements a multithreaded sort that sometimes sorts
+wrong due to concurrency.  Runs under thrille, have to figure out the best way
+to deal with long schedules.  Has its own error-checking method which it runs
+after the sort--just added an thrilleAssert(false) inside this method which
+gets called if an error is found.
+
+Placed a sleep statement where the preemption is in simplified schedules and this resulted 
+in errors in the sort when run not-under-thrille.
+
+
+***x264****(about 35kloc)
+jalbert@potus:~/Desktop/x264/x264/parsec_inputs> llockrace ../x264 --quiet --qp 20 --partitions b8x8,i4x4 --ref 5 --direct auto --weightb --mixed-refs --no-fast-pskip --me umh --subme 7 --analyse b8x8,i4x4 --threads 4 -o eledream.264 eledream_640x360_8.y4m 
+Thrille:Starting Default thriller...
+Thrille:Starting Race detection...
+Thrille:Write profiling size is 5
+Thrille:Read profiling size is 5
+Thrille:Starting Lockrace Thriller...
+Using modified hybrid tracker
+yuv4mpeg: 640x360@25/1fps, 0:0
+                                                                               
+encoded 8 frames, 11.11 fps, 4538.52 kb/s
+Thrille:Ending Lockrace Thriller...
+Consolidating final thread events
+Adding all events to the hybrid tracker
+Outputting races
+Races:
+Race: LockRaceRecord(0x42e87d, 0x42e968)
+Race: LockRaceRecord(0x42e87d, 0x42e87d)
+Race: LockRaceRecord(0x4186bf, 0x42e8ec)
+Race: LockRaceRecord(0x40ed33, 0x4186bf)
+Race: LockRaceRecord(0x418772, 0x42e8ec)
+Race: LockRaceRecord(0x40ed33, 0x418772)
+Race: LockRaceRecord(0x40ed23, 0x4185c5)
+Race: LockRaceRecord(0x4185c5, 0x418973)
+Race: LockRaceRecord(0x40ed23, 0x4187f8)
+Race: LockRaceRecord(0x4187f8, 0x418973)
+Data Race Events: 0
+Lock Race Events: 176
+Thrille:Ending Race detection...
+Thrille:Ending Default thriller...
+jalbert@potus:~/Desktop/x264/x264/parsec_inputs> 
+
+
+
+****Facesim****(20 - 35klock depending on how you count)
+jalbert@potus:~/Desktop/facesim/facesim/src/Benchmarks/facesim> lrandact ./facesim -threads 3
+Thrille:Starting Default thriller...
+Thrille:Starting Serializer Thriller...
+Thrille:Starting Random Active Testing...
+Thrille: Randomscheduler now defaults to scheduling at *EVERY* memory access
+Thrille: Chance of preemption set at 1/1
+NOTE: Random Active now defaults to scheduling at NO memory access points, if no data races are found in thrille-randomactive
+Scheduling at 0 memory access points
+Random Active (Lock) Testing started...
+Target 1: 0x50d2f7, Target 2: 0x50d8c4
+PARSEC Benchmark Suite
+Simulation                                        Reading simulation model : ./Face_Data/Eftychis_840k/Front_370k/face_simulation_3.tet
+Total particles = 80598
+Total tetrahedra = 372126
+muscles = 32
+Reading muscle data : procerus_left.constitutive_data
+Reading muscle data : procerus_right.constitutive_data
+Reading muscle data : corrugator_supercilii_left.constitutive_data
+Reading muscle data : corrugator_supercilii_right.constitutive_data
+Reading muscle data : orbicularis_oculi_left.constitutive_data
+Reading muscle data : orbicularis_oculi_right.constitutive_data
+Reading muscle data : nasalis_transverse.constitutive_data
+Reading muscle data : nasalis_alar_left.constitutive_data
+Reading muscle data : nasalis_alar_right.constitutive_data
+Reading muscle data : llsan_medial_left.constitutive_data
+Reading muscle data : llsan_medial_right.constitutive_data
+Reading muscle data : llsan_lateral_left.constitutive_data
+Reading muscle data : llsan_lateral_right.constitutive_data
+Reading muscle data : levator_labii_superioris_left.constitutive_data
+Reading muscle data : levator_labii_superioris_right.constitutive_data
+Reading muscle data : levator_anguli_oris_left.constitutive_data
+Reading muscle data : levator_anguli_oris_right.constitutive_data
+Reading muscle data : zygomatic_minor_left.constitutive_data
+Reading muscle data : zygomatic_minor_right.constitutive_data
+Reading muscle data : zygomatic_major_left.constitutive_data
+Reading muscle data : zygomatic_major_right.constitutive_data
+Reading muscle data : buccinator_left.constitutive_data
+Reading muscle data : buccinator_right.constitutive_data
+Reading muscle data : orbicularis_oris.constitutive_data
+Reading muscle data : risorius_left.constitutive_data
+Reading muscle data : risorius_right.constitutive_data
+Reading muscle data : depressor_anguli_oris_left.constitutive_data
+Reading muscle data : depressor_anguli_oris_right.constitutive_data
+Reading muscle data : depressor_labii_inferioris_left.constitutive_data
+Reading muscle data : depressor_labii_inferioris_right.constitutive_data
+Reading muscle data : mentalis_left.constitutive_data
+Reading muscle data : mentalis_right.constitutive_data
+procerus_left : Peak isometric stress = 300000
+procerus_right : Peak isometric stress = 300000
+corrugator_supercilii_left : Peak isometric stress = 300000
+corrugator_supercilii_right : Peak isometric stress = 300000
+orbicularis_oculi_left : Peak isometric stress = 200000
+orbicularis_oculi_right : Peak isometric stress = 200000
+nasalis_transverse : Peak isometric stress = 100000
+nasalis_alar_left : Peak isometric stress = 500000
+nasalis_alar_right : Peak isometric stress = 500000
+llsan_medial_left : Peak isometric stress = 200000
+llsan_medial_right : Peak isometric stress = 200000
+llsan_lateral_left : Peak isometric stress = 1e+07
+llsan_lateral_right : Peak isometric stress = 1e+07
+levator_labii_superioris_left : Peak isometric stress = 5e+06
+levator_labii_superioris_right : Peak isometric stress = 5e+06
+levator_anguli_oris_left : Peak isometric stress = 5e+06
+levator_anguli_oris_right : Peak isometric stress = 5e+06
+zygomatic_minor_left : Peak isometric stress = 2e+06
+zygomatic_minor_right : Peak isometric stress = 2e+06
+zygomatic_major_left : Peak isometric stress = 1e+07
+zygomatic_major_right : Peak isometric stress = 1e+07
+buccinator_left : Peak isometric stress = 3e+06
+buccinator_right : Peak isometric stress = 3e+06
+orbicularis_oris : Peak isometric stress = 300000
+risorius_left : Peak isometric stress = 300000
+risorius_right : Peak isometric stress = 300000
+depressor_anguli_oris_left : Peak isometric stress = 1e+07
+depressor_anguli_oris_right : Peak isometric stress = 1e+07
+depressor_labii_inferioris_left : Peak isometric stress = 3e+06
+depressor_labii_inferioris_right : Peak isometric stress = 3e+06
+mentalis_left : Peak isometric stress = 3e+06
+mentalis_right : Peak isometric stress = 3e+06
+attachments = 3
+Reading attachment data : cranium.attached_nodes
+Reading attachment data : jaw.attached_nodes
+Reading attachment data : flesh.attached_nodes
+
+  Frame 1                                         Activation #1 [active] : 0
+  Activation #2 [active] : 0
+  Activation #3 [active] : 0.124925
+  Activation #4 [active] : 0.25
+  Activation #5 [active] : 0
+  Activation #6 [active] : 0.25
+  Activation #7 [active] : 0
+  Activation #8 [active] : 0.25
+  Activation #9 [active] : 0.138782
+  Activation #10 [active] : 0
+  Activation #11 [active] : 0
+  Activation #12 [active] : 0
+  Activation #13 [active] : 0
+  Activation #14 [active] : 0
+  Activation #15 [active] : 0
+  Activation #16 [active] : 0.0080797
+  Activation #17 [active] : 0
+  Activation #18 [active] : 0
+  Activation #19 [active] : 0
+  Activation #20 [active] : 0.00177393
+  Activation #21 [active] : 0.0121384
+  Activation #22 [active] : 0.0142577
+  Activation #23 [active] : 0
+  Activation #24 [active] : 0.25
+  Activation #25 [active] : 0
+  Activation #26 [active] : 0
+  Activation #27 [active] : 0.00716811
+  Activation #28 [active] : 0.0158954
+  Activation #29 [active] : 0
+  Activation #30 [active] : 0.0167191
+  Activation #31 [active] : 0.030796
+  Activation #32 [active] : 0
+  Penalty at current activation levels : 0
+  Cranium frame control diagnostics
+  Transformation matrix :
+  0.997228 -0.0646216 -0.0368939 
+  0.0658362 0.997294 0.0327121 
+  0.0346802 -0.0350503 0.998784 
+  Singular values : 1 , 1 , 1
+  Translation : -0.0171414 0.015642 0.0160762
+  Rigidity penalty at current configuration : 1.42842e-14
+  Jaw frame control diagnostics
+  Transformation matrix :
+  0.999987 0.00491026 0.00102069 
+  -0.0049315 0.999747 0.021969 
+  -0.000912557 -0.0219738 0.999758 
+  Singular values : 1 , 1 , 1
+  Translation : 2.98235e-05 0.000208415 0.000331909
+  Rigidity penalty at current configuration : 3.24255e-22
+  Jaw plane deviation angle : 4.4005e-06
+  Jaw midpoint off-plane deviation : 0.000180237
+  Jaw midpoint off-axis deviation : 5.43559e-05
+  Left condyle sliding parameter : 0.0568083
+  Right condyle sliding parameter : -0.00818301
+  Opening angle : 0.0219715
+  Jaw constraint penalty at current configuration : 4.21556e-08
+  TIME = 0.0416667
+
+    END Frame 1                                      50.8085 s SIMULATION
+    0.0000 FRAME                                            50.8085 ADB
+    50.7648 UPBS                                          7.1927 UPBS (FEM) -
+    Initialize                     0.2689 s UPBS (FEM) - Element Loop
+    6.9237 s UPBS (CPF)                                  0.0000 s ADO
+    43.5721 ADO - Update collision bodies               0.0000 s AOTSQ
+    43.5720 AOTSQ - Initialize                        0.0029 s AOTSQ - NR loop
+    43.5691 AOTSQ - NR loop - Initialize            0.1464 s UCPF
+    0.6130 s NRS                                    34.1332 NRS - Initialize
+    0.0000 s NRS - Boundary conditions 1           0.0049 s UPBS
+    8.9845 UPBS (FEM) - Initialize             0.0000 s UPBS (FEM) - Element
+    Loop           8.9844 s UPBS (CPF)                          0.0000 s AFD
+    (FEM)                             0.0866 s AVIF
+    0.5416 AVIF (FEM)                          0.5403 s AVIF (CPF)
+    0.0012 s NRS - Boundary conditions 2           0.0022 s NRS - Compute
+    residual                0.0093 NRS - Copy initial guess              0.0030
+    s CGI                                  24.4944 UPBS
+    8.1248 UPBS (FEM) - Initialize               0.0000 s UPBS (FEM) - Element
+    Loop             8.1247 s UPBS (CPF)                            0.0000 s
+    AVIF                                    0.5385 AVIF (FEM)
+    0.5372 s AVIF (CPF)                            0.0012 s AOTSQ - NR loop -
+    Boundary conditions   0.0033 s AOTSQ - NR loop - Compute residual
+    0.0045 s Thrille:Ending Random Active Testing...  Lock Race Between
+    0x50d2f7 and 0x50d8c4 Found!  Thrille: WARNING thread 1 is not finished
+    Thrille: WARNING thread 2 is not finished Number of Context Switches: 7303
+    Number of Preemptions: 5726 Number of Non-Preemptive Context Switches: 1577
+    Closing log Thrille:Ending Serializer Thriller...
+

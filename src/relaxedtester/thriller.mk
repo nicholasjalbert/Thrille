@@ -1,0 +1,5 @@
+THRILLERNAME=relaxedtester
+RELAXEDTESTER_SRC_NAMES=librelaxedtester.cpp testertracker.cpp 
+RELAXEDTESTER_HEADER_NAMES=librelaxedtester.h testertracker.cpp 
+TARGET=librelaxedtester.so
+TESTFILES=librelaxedtester.cpp

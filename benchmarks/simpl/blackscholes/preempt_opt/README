@@ -1,0 +1,7 @@
+Optimal preempt schedule for the seeded deadlock in blackscholes executed as follows:
+
+./blackscholes 8 32
+
+This schedule is the same as the optimal-context-switch schedule because both
+have no preemptions!
+

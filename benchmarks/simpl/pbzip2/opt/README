@@ -1,0 +1,28 @@
+NOTE:  There is no guarantee these traces are optimal in size (number of
+scheduling points). In fact, I am certain the segfaults are suboptimal in size.
+I *do* believe these traces are optimal in number of context switches
+
+NOTE2: The trace sizes for the segfaults just got more wrong now that I have 
+correctly implemented the pthread spec (a.k.a. locking a destroyed mutex is
+not a bug by iteslf).  Context switches should still be optimal.
+
+Optimality recheck:  These schedules are optimal in the number of context
+switches (4) to make a bug manifest.  The minimal number of context switches
+for a bug free pbzip2 execution is 3:  Thread 0 spawns all threads, puts items
+    on the queue and joins the output thread, A worker thread handles all items
+    on the queue, The ouptut thread writes output, Thread 0 cleans up and
+    program exits.  The bug results from improper synchronization which can
+    have A worker thread try to grab a lock after thread 0 has freed it.  Thus
+    we have to preempt thread 0 between the beginning of cleanup and the end of
+    the program to make the bug happen--4 context switch (5 TEI) minimal for
+    the bug
+
+
+
+Optimality for destroying a locked mutex:
+
+The minimal context switches required here are 3 (the same as a non-preemptive
+execution of pbzip2). 
+
+All you need to do is preempt a worker thread while it is holding a mutex
+instead of letting it finish.

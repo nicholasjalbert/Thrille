@@ -1,0 +1,11 @@
+Thrille:Starting Default thriller...
+Thrille:Starting Serializer Thriller...
+Thrille:Starting *relaxed* serializer handler...
+Logger: Relaxed Logger engaged
+My return addr 0x400e3f
+Thread 0 has run out of times to be scheduled
+Thread 0 was scheduled 47 times
+NonPreemptive_Context_Switch(from, to, id_addr):0:1:0x400ec6
+NonPreemptive_Context_Switch(from, to, id_addr):1:0:0x400d30
+Number of Context Switches: 2
+Number of Preemptions: 0

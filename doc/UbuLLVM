@@ -1,0 +1,130 @@
+LLVM instructions:
+
+To be able to track a program's memory accesses, we have to compile it with
+LLVM.  Here's how to install LLVM in the way Thrille is expecting:
+
+-Go to the LLVM site here and download the 2.6 LLVM source code and the 2.6
+front-end binaries for the OS you are running.
+
+-Unzip these two files in a directory of your choosing (we'll update the
+Thrille makefiles later to reflect where you install these).
+
+-Test that the binaries are right for your architecture--e.g.:
+
+nick@nick-desktop:~/Desktop/llvm-gcc-4.2-2.6-i686-linux/bin$ ./llvm-g++
+llvm-g++: no input files
+
+-Go into the LLVM source directory (llvm-2.6), execute './configure' followed
+by 'make', this will build the llvm source tools we need to instrument the
+program.  Warning: this will take a little while.
+
+-Now we must compile the instrumentation pass.  Copy the pass's source
+directory ($THRILLE_ROOT/src/LoadStore) into your llvm-2.6/lib/Transforms/
+directory:
+
+nick@nick-desktop:~/Desktop/llvm-2.6/lib/Transforms$ cp -r /home/nick/thrille/trunk/thrille/src/LoadStore/ .
+
+-Now build the pass.  This creates the shared library LLVMLoadStore.so in
+llvm2.6/Release/lib: 
+
+nick@nick-desktop:~/Desktop/llvm-2.6/lib/Transforms$ cd LoadStore/ 
+nick@nick-desktop:~/Desktop/llvm-2.6/lib/Transforms/LoadStore$ make
+
+
+Alright, almost there...
+
+-Go to $THRILLE_ROOT/benchmarks/simpl directory and update the common.mk file that resides there with the path to the front-end binaries and the build tools.  Here is what mine looked like after the update:
+
+LLVM_GCC_PATH=/home/nick/Desktop/llvm-gcc-4.2-2.6-i686-linux/bin/llvm-gcc
+LLVM_GPP_PATH=/home/nick/Desktop/llvm-gcc-4.2-2.6-i686-linux/bin/llvm-g++
+LLVM_LLC_PATH=/home/nick/Desktop/llvm-2.6/Release/bin/llc
+LLVM_OPT_PATH=/home/nick/Desktop/llvm-2.6/Release/bin/opt
+LLVM_PASS_PATH=/home/nick/Desktop/llvm-2.6/Release/lib/LLVMLoadStore.so
+
+-Alright, let's try her out.  Starting in the $THRILLE_ROOT/benchmarks/simpl/:
+
+> cd canneal
+> make llvmerr1
+> cd bin
+> LD_PRELOAD=$THRILLE_ROOT/bin/liblockrace.so ./canneal-e1 3 100 100 ../inputs/10.nets
+
+-If the program analysis gods have smiled upon you, among other output you will
+see: 
+
+Race: DataRaceRecord(0x8070102, 0x80701cd) 
+Race: DataRaceRecord(0x80701cd, 0x80701cd) 
+Race: LockRaceRecord(0x8070c1f, 0x8070c1f) 
+
+It's good news if you get data race records, because that means the
+instrumentation worked!  
+
+-What do the race identifiers mean?  You can use binutils to map them back to
+source (assuming the program was compiled with debugging):
+
+> addr2line -e canneal-e1 0x08070102
+/home/nick/Desktop/thrille/trunk/thrille/benchmarks/simpl/canneal/src/annealer_thread.cpp:138
+                         
+
+-Now lets give simplification a shot, first we need a buggy trace.
+
+>  LD_PRELOAD=$THRILLE_ROOT/bin/librandact.so ./canneal-e1 8 80 100 ../inputs/10.nets
+
+Run this a couple of times and you will eventually get: 
+
+ExecTracker: safe assert fail: safe_assert(DeadlockNotDetected): 
+    function: deadlockCheck
+    file: executiontracker.cpp
+    line: 960
+
+Huzzah!  We have found a deadlock, and the trace will be in the my-schedule
+file.  Copy the start trace to something that won't get overwritten when we
+re-run thrille:
+
+> cp my-schedule simplstart
+
+Now let's run the simplify script:
+
+> python $THRILLE_ROOT/scripts/simpl/fwdrev/simpl.py simplstart simplend canneal-e1 8 80 100 ../inputs/10.nets 
+
+If all goes well, it will print some output and terminate with something like the following:
+
+Start Schedule:
+Total Schedule Points: 118
+Total Threads: 9
+Context Switches: 47
+Preemptions: 28
+
+
+Simplified Schedule:
+Total Schedule Points: 118
+Total Threads: 9
+Context Switches: 16
+Preemptions: 1
+
+The simplified schedule will now be in simplend.  If you copy it to
+thrille-relaxed-sched and then execute canneal under librelaxedserial.so, it
+should replay the simplified schedule in all its glory.
+
+> cp simplend thrille-relaxed-sched
+> LD_PRELOAD=$THRILLE_ROOT/bin/librelaxedserial.so ./canneal-e1 8 80 100 ../inputs/10.nets
+
+e.g.: 
+                                      
+PARSEC Benchmark Suite
+Threadcount: 8
+100 swaps per temperature step
+start temperature: 100
+netlist filename: ../inputs/10.nets
+locs created
+locs assigned
+netlist created. 10 elements.
+                                      
+ExecTracker: safe assert fail: safe_assert(DeadlockNotDetected): 
+        function: deadlockCheck
+        file: executiontracker.cpp
+        line: 960
+        
+        Number of Context Switches: 16
+        Number of Preemptions: 1
+        Number of Non-Preemptive Context Switches: 15
+

@@ -1,0 +1,18 @@
+Pfscan originally had a segfault error based on input, however there were
+issues with deterministically reproducing it.  As a result, we added an
+atomicity violation similar to dedup and an assertion which ensure the checked
+condition is still true after the "critical" period of the violation.  
+
+The optimal schedule to reach the bug is valid for the following input:
+
+./pfscan -n8 jalbert /home/jalbert/pfscan_test
+
+
+Optimality Recheck:  This error occurs between thread workers. We need thread 0
+to spawn the workers and put at least one item on the queue (1 TEI).  Then, as
+is standard, one thread tries to get the item but pauses at the atomicity
+violation (2 TEI), then another thread swoops in and steals the item (3 TEI).
+Finally the paused thread re-executes and asserts the condition is still true
+(4 TEI).  Thus the optimal execution in terms of context switches is 3 (4
+TEIs).
+

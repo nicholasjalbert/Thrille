@@ -1,0 +1,103 @@
+Command that was run:
+/home/jalbert/thrille/trunk/thrille/scripts/simpl/fwdrev/multiexp.py 25 /home/jalbert/thrille/trunk/thrille/benchmarks/simpl/swarm/exp/11092009 swarm-e1 
+
+**RUN 0
+Error: assert fail executiontracker.cpp notThrilleAssertFail
+
+Start Schedule:
+Total Schedule Points: 100 
+Total Threads: 6
+Context Switches: 50
+Non-Preemptive Context Switches: 26
+Preemptions: 24
+
+
+Simplified Schedule:
+Total Schedule Points: 90
+Total Threads: 5
+Context Switches: 40
+Non-Preemptive Context Switches: 21
+Preemptions: 19
+
+Number of Iterations: 2
+Number of Executions: 500
+Time (sec): 180
+Number of empty schedules: 3000
+Number of generated schedules which show our bug: 450
+Number of generated schedules which show a different bug: 15
+Number of generated schedules which show no bug: 6
+
+Avg threads enabled at all context switches: 2.1
+Avg threads enabled at non-preemptive context switches: 2.2
+Avg threads enabled at preemptive context switches: 2.3
+Avg threads enabled at all scheduling points: 2.4
+
+Scheduling points removed by Backward Consolidation s: 2
+Threads removed by Backward Consolidation t: 0
+Context Switches removed by Backward Consolidation c: 4
+Non-Preemptive Context Switches removed by Backward Consolidation n: 0
+Preemptive Context Switches removed by Backward Consolidation p: 1
+
+Scheduling points removed by Block Removal s: 3
+Threads removed by Block Removal t: 0
+Context Switches removed by Block Removal c: 5
+Non-Preemptive Context Switches removed by Block Removal n: 2
+Preemptive Context Switches removed by Block Removal p: 2
+
+Scheduling points removed by Forward Consolidation2 s: 5
+Threads removed by Forward Consolidation2 t: 1
+Context Switches removed by Forward Consolidation2 c: 1
+Non-Preemptive Context Switches removed by Forward Consolidation2 n: 3
+Preemptive Context Switches removed by Forward Consolidation2 p: 2 
+
+
+**RUN 1
+Error: assert fail executiontracker.cpp notThrilleAssertFail
+
+Start Schedule:
+Total Schedule Points: 102
+Total Threads: 8
+Context Switches: 52
+Non-Preemptive Context Switches: 28
+Preemptions: 26
+
+
+Simplified Schedule:
+Total Schedule Points: 92
+Total Threads: 6
+Context Switches: 42
+Non-Preemptive Context Switches: 25
+Preemptions: 17
+
+Number of Iterations: 3
+Number of Executions: 600
+Time (sec): 200
+Number of empty schedules: 3500
+Number of generated schedules which show our bug: 400
+Number of generated schedules which show a different bug: 31
+Number of generated schedules which show no bug: 8
+
+Avg threads enabled at all context switches: 4.1
+Avg threads enabled at non-preemptive context switches: 4.2
+Avg threads enabled at preemptive context switches: 4.3
+Avg threads enabled at all scheduling points: 4.4
+
+Scheduling points removed by Backward Consolidation s: 7
+Threads removed by Backward Consolidation t: 1
+Context Switches removed by Backward Consolidation c: 2
+Non-Preemptive Context Switches removed by Backward Consolidation n: 0
+Preemptive Context Switches removed by Backward Consolidation p: 1
+
+Scheduling points removed by Block Removal s: 2
+Threads removed by Block Removal t: 0
+Context Switches removed by Block Removal c: 5
+Non-Preemptive Context Switches removed by Block Removal n: 1
+Preemptive Context Switches removed by Block Removal p: 2
+
+Scheduling points removed by Forward Consolidation2 s: 3
+Threads removed by Forward Consolidation2 t: 1
+Context Switches removed by Forward Consolidation2 c: 3
+Non-Preemptive Context Switches removed by Forward Consolidation2 n: 2
+Preemptive Context Switches removed by Forward Consolidation2 p: 6
+
+

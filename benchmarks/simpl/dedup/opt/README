@@ -1,0 +1,33 @@
+Optimal schedules for segfaults on 8 different threads.  There are two cases
+(and then 4 symmetric subcases for each case) for these segfaults.  These are
+optimal for input:
+
+./dedup-e1 -c -p -f -t 4 -i ../inputs/nick.dat -o /dev/null
+
+
+The seeded error is an atomicity violation inserted into the dequeue method of
+a shared queue (i.e. we grab a lock, check the queue is not empty, release the
+lock, immediately grab it again, remove from queue). See Figure 1 in Lu's
+asplos08 paper for an example of this kind of bug without locks.
+
+Optimality recheck:
+
+Scheds 1-4:  These schedules are optimal in the number of context switches (4)
+to make threads 1-4 segfault.  Thread 0 must spawn all threads involved (1
+TEI).  Threads 1-4 operated in the second stage of the pipeline, so an item
+must be processed by one of the threads in the first stage of the pipeline
+before threads 1-4 can make any progress.  That thread will account TEI number
+2.  Then, once threads 1-4 can make progress we actually have to exeercise the
+atomicity viollation--one thread will have to enter the critical section but
+then pause (3 TEI), then another thread will have to swoop in and get the item
+(4TEI), finally the paused thread will have to read garbage and segfault (5
+TEI, 4 context switches).
+
+
+Scheds 5-8:  This reasoning for this is similar, there is one less context
+switch though because thread 0 actually puts the item in the queue for these
+    threads (which are at the start of the pipeline). Thus thread 0 puts item
+    in queue and spawns threads (1 TEI), thread 5 pauses at atomicity
+    violation (2 TEI), thread 6 swoops in and steas the item on the queue (3
+    TEI), and thread 5 gets executed, reads garbage and segfaults (4 TEI, 3
+    context switches).

@@ -1,0 +1,18 @@
+Optimal schedule for the seeded deadlock in blackscholes executed as follows:
+
+./blackscholes 8 32
+
+This benchmark has all threads do independent things, all wait at a barrier,
+and then the main thread joins each individual thread.  The seeded bug is a
+misinitialized barrier which will leave one thread waiting on it.  The main
+thread is then changed to join only one of the worker threads.  If it joins the
+thread caught on the barrier, we will deadlock.
+
+
+Optimality recheck:  thread 0 has to spawn all threads and then join thread 6
+(1 TEI).  6 threads have to execute and make it to the barrier (7 TEI), the 7th
+thread hits the barrier and then finishes (8 TEI), then all threads waiting on
+the barrier have to finish (14 TEI).  Finally we have to execute the thread
+that will get stuck on the barrier and is being joined by thread 0 (15 TEI).
+
+Thus the optimal schedule has 14 context switches (15 TEI).
