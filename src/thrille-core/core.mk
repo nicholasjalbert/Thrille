@@ -26,6 +26,7 @@ $(OBJDIR)/%.o: %.cpp $(HEADERS)
 	g++ -c -g -Wall -fPIC -fno-exceptions -o $@ $<
 
 objdir:
+	mkdir -p $(BINDIR)
 	mkdir -p $(OBJDIR)
 	mkdir -p $(OBJROOT)/thrille-core
 
