@@ -36,7 +36,7 @@ Send comments, questions, and suggestions to jalbert@eecs.berkeley.edu.
 unzipped the tarball in my home directory, I would execute (or put into my
 .bashrc) the following command: 
 
-export THRILLE_ROOT=~/thrille
+export THRILLE_ROOT=~/Thrille
 
 2) You should also let the linker know to look in the Thrille binary directory
 by executing (or putting in your .bashrc) the following command: 
