@@ -622,6 +622,13 @@ To modify which function calls Thrille intercepts, one can unmarshal the
 dictionary in python, add or delete the functions in question, write the
 dictionary back out, execute the corecodegen.py script, and then recompile.
 
+3) How do I turn on debug information for serializer based Thrillers?
+
+Thrille reads the file found a
+$THRILLE_ROOT/src/serializer/config/thrille-print to determine if it should
+print debug info to standard out while executing.  A 1 in the file will turn
+debug info on, a 0 in this file will turn debug info off.
+
 
 
 
