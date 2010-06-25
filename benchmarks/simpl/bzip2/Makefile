@@ -5,6 +5,8 @@ include ../common.mk
 CFLAGS = -g -D_FILE_OFFSET_BITS=64 -D_REENTRANT -D_GNU_SOURCE
 
 llvm:
+	mkdir -p obj
+	mkdir -p bin
 	$(LLVM_GCC_PATH) $(CFLAGS) -DNICKEDIT -c -emit-llvm src/bzip2smp.c -o - | $(LLVM_OPT_PATH) -load $(LLVM_PASS_PATH) -loadstore -f -o - | $(LLVM_LLC_PATH) -f -o obj/bzip2smp.s
 	$(LLVM_GCC_PATH) $(CFLAGS) -c -emit-llvm src/note.c -o - | $(LLVM_OPT_PATH) -load $(LLVM_PASS_PATH) -loadstore -f -o - | $(LLVM_LLC_PATH) -f -o obj/note.s
 	$(LLVM_GCC_PATH) $(CFLAGS) -c -emit-llvm src/detectht.c -o - | $(LLVM_OPT_PATH) -load $(LLVM_PASS_PATH) -loadstore -f -o - | $(LLVM_LLC_PATH) -f -o obj/detectht.s
@@ -23,6 +25,8 @@ llvm:
 	rm iiddump
 
 llvmerr1: 
+	mkdir -p obj
+	mkdir -p bin
 	$(LLVM_GCC_PATH) $(CFLAGS) -DERR1 -DNICKEDIT -c -emit-llvm src/bzip2smp.c -o - | $(LLVM_OPT_PATH) -load $(LLVM_PASS_PATH) -loadstore -f -o - | $(LLVM_LLC_PATH) -f -o obj/bzip2smp.s
 	$(LLVM_GCC_PATH) $(CFLAGS) -DERR1 -c -emit-llvm src/note.c -o - | $(LLVM_OPT_PATH) -load $(LLVM_PASS_PATH) -loadstore -f -o - | $(LLVM_LLC_PATH) -f -o obj/note.s
 	$(LLVM_GCC_PATH) $(CFLAGS) -DERR1 -c -emit-llvm src/detectht.c -o - | $(LLVM_OPT_PATH) -load $(LLVM_PASS_PATH) -loadstore -f -o - | $(LLVM_LLC_PATH) -f -o obj/detectht.s

@@ -15,6 +15,8 @@ CFLAGS += -DPARALLEL -pthread
 all:llvm
 
 llvm:
+	mkdir -p obj
+	mkdir -p bin
 	$(LLVM_GCC_PATH) -c -emit-llvm $(CFLAGS) src/hashtable.c -o - | $(LLVM_OPT_PATH) -load $(LLVM_PASS_PATH) -loadstore -f -o - | $(LLVM_LLC_PATH) -f -o obj/hashtable.s
 	$(LLVM_GCC_PATH) -c -emit-llvm $(CFLAGS) src/queue.c -o - | $(LLVM_OPT_PATH) -load $(LLVM_PASS_PATH) -loadstore -f -o - | $(LLVM_LLC_PATH) -f -o obj/queue.s
 	$(LLVM_GCC_PATH) -c -emit-llvm $(CFLAGS) src/util.c -o - | $(LLVM_OPT_PATH) -load $(LLVM_PASS_PATH) -loadstore -f -o - | $(LLVM_LLC_PATH) -f -o obj/util.s
@@ -29,6 +31,8 @@ llvm:
 
 
 llvmerr1:
+	mkdir -p obj
+	mkdir -p bin
 	$(LLVM_GCC_PATH) -c -emit-llvm $(CFLAGS) src/hashtable.c -o - | $(LLVM_OPT_PATH) -load $(LLVM_PASS_PATH) -loadstore -f -o - | $(LLVM_LLC_PATH) -f -o obj/hashtable.s
 #	$(LLVM_GCC_PATH) -c -emit-llvm $(CFLAGS) -DNICKSLEEP -DERR1 src/queue.c -o - | $(LLVM_OPT_PATH) -load $(LLVM_PASS_PATH) -loadstore -f -o - | $(LLVM_LLC_PATH) -f -o obj/queue.s
 	$(LLVM_GCC_PATH) -c -emit-llvm $(CFLAGS) -DERR1 src/queue.c -o - | $(LLVM_OPT_PATH) -load $(LLVM_PASS_PATH) -loadstore -f -o - | $(LLVM_LLC_PATH) -f -o obj/queue.s

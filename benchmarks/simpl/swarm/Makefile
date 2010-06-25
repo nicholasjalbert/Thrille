@@ -5,6 +5,8 @@ OUT=swarm
 
 
 llvm: src/$(SRCFILE)
+	mkdir -p obj
+	mkdir -p bin
 	$(LLVM_GCC_PATH) -c -emit-llvm -g src/$(SRCFILE) -o bin/tmp.bc 
 	$(LLVM_OPT_PATH) -load $(LLVM_PASS_PATH) -loadstore -f -o bin/tmppass.bc bin/tmp.bc
 	$(LLVM_LLC_PATH) -f bin/tmppass.bc
@@ -12,6 +14,8 @@ llvm: src/$(SRCFILE)
 	rm -f iiddump bin/*.s bin/*.bc	
 
 llvmerr1: src/$(SRCFILE)
+	mkdir -p obj
+	mkdir -p bin
 	$(LLVM_GCC_PATH) -c -emit-llvm -g -DERR1 src/$(SRCFILE) -o bin/tmp.bc 
 	$(LLVM_OPT_PATH) -load $(LLVM_PASS_PATH) -loadstore -f -o bin/tmppass.bc bin/tmp.bc
 	$(LLVM_LLC_PATH) -f bin/tmppass.bc

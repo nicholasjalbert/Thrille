@@ -8,6 +8,8 @@ LIBS:=$(LIBS) -lm
 CXXFLAGS+=-DENABLE_THREADS -pthread
 
 llvm:
+	mkdir -p obj
+	mkdir -p bin
 	$(LLVM_GPP_PATH) $(CXXFLAGS) -c -emit-llvm -g src/annealer_thread.cpp -o - | $(LLVM_OPT_PATH) -load $(LLVM_PASS_PATH) -loadstore -f -o - | $(LLVM_LLC_PATH) -f -o obj/annealer_thread.s
 	$(LLVM_GPP_PATH) $(CXXFLAGS) -c -emit-llvm -g src/rng.cpp -o - | $(LLVM_OPT_PATH) -load $(LLVM_PASS_PATH) -loadstore -f -o - | $(LLVM_LLC_PATH) -f -o obj/rng.s
 	$(LLVM_GPP_PATH) $(CXXFLAGS) -c -emit-llvm -g src/netlist.cpp -o - | $(LLVM_OPT_PATH) -load $(LLVM_PASS_PATH) -loadstore -f -o - | $(LLVM_LLC_PATH) -f -o obj/netlist.s
@@ -17,6 +19,8 @@ llvm:
 	rm -f *.s iiddump
 
 llvmerr1:
+	mkdir -p obj
+	mkdir -p bin
 	$(LLVM_GPP_PATH) $(CXXFLAGS) -DERR1 -c -emit-llvm -g src/annealer_thread.cpp -o - | $(LLVM_OPT_PATH) -load $(LLVM_PASS_PATH) -loadstore -f -o - | $(LLVM_LLC_PATH) -f -o obj/annealer_thread.s
 	$(LLVM_GPP_PATH) $(CXXFLAGS) -DERR1 -c -emit-llvm -g src/rng.cpp -o - | $(LLVM_OPT_PATH) -load $(LLVM_PASS_PATH) -loadstore -f -o - | $(LLVM_LLC_PATH) -f -o obj/rng.s
 	$(LLVM_GPP_PATH) $(CXXFLAGS) -DERR1 -c -emit-llvm -g src/netlist.cpp -o - | $(LLVM_OPT_PATH) -load $(LLVM_PASS_PATH) -loadstore -f -o - | $(LLVM_LLC_PATH) -f -o obj/netlist.s

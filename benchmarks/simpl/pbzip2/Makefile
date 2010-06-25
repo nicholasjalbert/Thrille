@@ -6,6 +6,8 @@ OUT=pbzip2
 
 # pbzip2 with instrumented memory operations
 llvm: src/pbzip2.cpp
+	mkdir -p obj
+	mkdir -p bin
 	$(LLVM_GPP_PATH) -c -emit-llvm -g src/$(SRCFILE) -o bin/tmp.bc 
 	$(LLVM_OPT_PATH) -load $(LLVM_PASS_PATH) -loadstore -f -o bin/tmppass.bc bin/tmp.bc
 	$(LLVM_LLC_PATH) -f bin/tmppass.bc
@@ -13,6 +15,8 @@ llvm: src/pbzip2.cpp
 	rm iiddump bin/*.s bin/*.bc	
 
 llvmerr1: 
+	mkdir -p obj
+	mkdir -p bin
 	$(LLVM_GPP_PATH) -c -emit-llvm -g src/$(SRCFILE) -o bin/tmp.bc 
 	$(LLVM_OPT_PATH) -load $(LLVM_PASS_PATH) -loadstore -f -o bin/tmppass.bc bin/tmp.bc
 	$(LLVM_LLC_PATH) -f bin/tmppass.bc

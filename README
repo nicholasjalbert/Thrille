@@ -23,7 +23,8 @@ ANY kind.
 
 All benchmarks belong to their respective owners.  If you are the creator
 and/or rights holder of one of the benchmarks and would like it taken down,
-please contact jalbert@eecs.berkeley.edu.
+please contact jalbert@eecs.berkeley.edu.  All bugs were hand inserted (except
+for pbzip2 and swarm, both of which were old versions).
 
 Send comments, questions, and suggestions to jalbert@eecs.berkeley.edu.
 

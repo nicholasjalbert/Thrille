@@ -33,6 +33,8 @@ OBJS = pfscan.o bm.o version.o pqueue.o
 
 
 llvm:
+	mkdir -p obj
+	mkdir -p bin
 	$(LLVM_GCC_PATH) -c -emit-llvm -g src/pfscan.c -o - | $(LLVM_OPT_PATH) -load $(LLVM_PASS_PATH) -loadstore -f -o - | $(LLVM_LLC_PATH) -f -o obj/pfscan.s
 	$(LLVM_GCC_PATH) -c -emit-llvm -g src/bm.c -o - | $(LLVM_OPT_PATH) -load $(LLVM_PASS_PATH) -loadstore -f -o - | $(LLVM_LLC_PATH) -f -o obj/bm.s
 	$(LLVM_GCC_PATH) -c -emit-llvm -g src/version.c -o - | $(LLVM_OPT_PATH) -load $(LLVM_PASS_PATH) -loadstore -f -o - | $(LLVM_LLC_PATH) -f -o obj/version.s
@@ -41,6 +43,8 @@ llvm:
 	rm -f *.s iiddump
 
 llvmerr1: 
+	mkdir -p obj
+	mkdir -p bin
 	$(LLVM_GCC_PATH) -c -emit-llvm -g -DERR1 src/pfscan.c -o - | $(LLVM_OPT_PATH) -load $(LLVM_PASS_PATH) -loadstore -f -o - | $(LLVM_LLC_PATH) -f -o obj/pfscan.s
 	$(LLVM_GCC_PATH) -c -emit-llvm -g -DERR1 src/bm.c -o - | $(LLVM_OPT_PATH) -load $(LLVM_PASS_PATH) -loadstore -f -o - | $(LLVM_LLC_PATH) -f -o obj/bm.s
 	$(LLVM_GCC_PATH) -c -emit-llvm -g -DERR1 src/version.c -o - | $(LLVM_OPT_PATH) -load $(LLVM_PASS_PATH) -loadstore -f -o - | $(LLVM_LLC_PATH) -f -o obj/version.s

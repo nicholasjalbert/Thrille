@@ -51,11 +51,15 @@ CXXFLAGS += $(MT) $(SZ) $(NCO) $(FUNC) $(ERR)
 all: llvm
 
 llvm:
+	mkdir -p obj
+	mkdir -p bin
 	$(LLVM_GPP_PATH) -c -emit-llvm -g $(CXXFLAGS) src/$(CSRC) -o - | $(LLVM_OPT_PATH) -load $(LLVM_PASS_PATH) -loadstore -f -o - | $(LLVM_LLC_PATH) -f -o obj/blackscholes.s
 	g++ $(CXXFLAGS) obj/blackscholes.s  -o bin/blackscholes -L$(THRILLE_ROOT)/bin/ -ldummy 
 	rm -f *.s iiddump
 
 llvmerr1:
+	mkdir -p obj
+	mkdir -p bin
 	$(LLVM_GPP_PATH) -c -emit-llvm -g $(CXXFLAGS) src/$(CSRC)  -DERR1 -o - | $(LLVM_OPT_PATH) -load $(LLVM_PASS_PATH) -loadstore -f -o - | $(LLVM_LLC_PATH) -f -o obj/blackscholes.s
 	g++ $(CXXFLAGS) obj/blackscholes.s -o bin/blackscholes-e1 -L$(THRILLE_ROOT)/bin/ -ldummy 
 	rm -f *.s iiddump

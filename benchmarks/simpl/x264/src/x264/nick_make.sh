@@ -2,4 +2,5 @@
 
 make -f nick.mak
 make
-cp x264 ../../bin/
+mkdir -p ../../bin/
+cp x264 ../../bin/x264-e1
