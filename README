@@ -469,7 +469,7 @@ Number of generated schedules which show a different bug: 0
 Number of generated schedules which show no bug: 8
 
 
-10) simplify-end now contains the simplified script.  We can replay the
+10) simplify-end now contains the simplified schedule.  We can replay the
 simplified buggy trace by copying it to thrille-relaxed-sched (the script outputs
 the trace in a different format than the input) and using the relaxed testing
 thriller:
