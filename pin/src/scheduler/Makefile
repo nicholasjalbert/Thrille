@@ -38,7 +38,7 @@ endif
 ##############################################################
 
 
-TOOL_ROOTS = inscount0 inscount1 inscount2 proccount imageload staticcount 
+TOOL_ROOTS = emptypintool inscount0 inscount1 inscount2 proccount imageload staticcount 
 ifeq ($(DETACH_SUPPORTED), yes)
     TOOL_ROOTS += detach
 endif
