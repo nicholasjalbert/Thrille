@@ -95,7 +95,26 @@ VOID Trace(THREADID thread,
 
 }
 
+BOOL InMainExecutable(TRACE trace) {
+    RTN rtn = TRACE_Rtn(trace);
+    if (! RTN_Valid(rtn)) {
+        return false;
+    }
+    SEC sec = RTN_Sec(rtn);
+    if (! SEC_Valid(sec)) {
+        return false;
+    }
+    IMG img = SEC_Img(sec);
+    if (! IMG_Valid(img)) {
+        return false;
+    }
+    return IMG_IsMainExecutable(img);
+}
+
 VOID TraceMemory(TRACE trace, VOID* v) {
+    if (! InMainExecutable(trace)) {
+        return;
+    }
     for (BBL bbl = TRACE_BblHead(trace);
             BBL_Valid(bbl);
             bbl = BBL_Next(bbl)) {
