@@ -1,6 +1,7 @@
 THRILLE Readme
 
 Contents:
+-1) Branch Log
 0) Preamble
 1) Basic Setup
 2) Architecture Overview
@@ -9,6 +10,19 @@ Contents:
 5) Chess Example
 6) Making your own Thriller Example
 7) FAQ
+
+------------------------------------------------------------------------------
+-1) Branch Log
+------------------------------------------------------------------------------
+
+The current Thrille branches include:
+
+-master (standard trace format which should work with simplification tools
+described in FSE10)
+
+-simple (modifying the trace format for CS264 class project. This *will* break
+simplification tools).
+
 
 ------------------------------------------------------------------------------
 0) Preamble 
