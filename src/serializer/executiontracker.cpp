@@ -888,7 +888,8 @@ void ExecutionTracker::myMemoryRead(thrID myself, void * ret_addr,
     log->myMemoryRead(myself, addr);
     handleMyMemoryRead(myself, ret_addr, addr);
     SchedPointInfo tmp(ret_addr, "Memory Read", myself,
-            enable_map, IS_NOT_YIELD, addr);
+            enable_map, IS_NOT_YIELD);
+    tmp.memory_accessed = addr;
     schedule(&tmp);
     gunlock();
     pauseThread(myself);
@@ -902,7 +903,8 @@ void ExecutionTracker::myMemoryWrite(thrID myself, void * ret_addr,
     log->myMemoryWrite(myself, addr);
     handleMyMemoryWrite(myself, ret_addr, addr);
     SchedPointInfo tmp(ret_addr, "Memory Write", myself,
-            enable_map, IS_NOT_YIELD, addr);
+            enable_map, IS_NOT_YIELD);
+    tmp.memory_accessed = addr;
     schedule(&tmp);
     gunlock();
     pauseThread(myself);
