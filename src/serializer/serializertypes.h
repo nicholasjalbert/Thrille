@@ -41,13 +41,13 @@ struct SchedPointInfo {
     bool fromLog;
 
     SchedPointInfo(void * ret, string ty, thrID thr,
-            map<thrID, bool> en, bool isy) {
+            map<thrID, bool> en, bool isy, void* mem=NULL) {
         ret_addr = ret;
         type = ty;
         thread = thr;
         enabled = en;
         isYield = isy;
-        memory_accessed = NULL;
+        memory_accessed = mem;
     }
 };
 
@@ -89,11 +89,11 @@ class DecisionInfo {
 class ScheduleDecisionInfo: public DecisionInfo {
     private:
         string description;
+        void* memory_accessed;
         vector<thrID> enabled;
 
     public:
-        void* memory_accessed;
-        ScheduleDecisionInfo(thrID, thrID, string, void *); 
+        ScheduleDecisionInfo(thrID, thrID, string, void*, void*); 
         virtual void printToFile(FILE *);
         void addEnabledThread(thrID);
         string changeSpacesToUnderscores(string);
