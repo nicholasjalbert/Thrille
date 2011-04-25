@@ -23,6 +23,8 @@ described in FSE10)
 -simple (modifying the trace format for CS264 class project. This *will* break
 simplification tools).
 
+**YOU ARE CURRENTLY ON THE SIMPLE BRANCH**
+
 
 ------------------------------------------------------------------------------
 0) Preamble 
