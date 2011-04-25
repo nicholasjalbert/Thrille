@@ -18,7 +18,7 @@ class SchedulePoint:
     def __init__(self, list):
         assert len(list) >= 0
         if "signalled" in list[0]:
-            assert len(list) == 11
+            assert len(list) == 12
             assert "signalled" in list[0]
             assert "caller" in list[1]
             assert "idaddr" in list[2]
@@ -30,35 +30,40 @@ class SchedulePoint:
             assert "typstr" in list[8]
             assert "Simulate_Signal" in list[8]
             assert "idaddr" in list[9]
-            assert "enable" in list[10]
+            assert "memory" in list[10]
+            assert "enable" in list[11]
             self.chosen = self.splitColonSeparatedInput(list[6])
             self.caller = self.splitColonSeparatedInput(list[7])
             self.type = self.splitColonSeparatedInput(list[8])
             self.addr = self.splitColonSeparatedInput(list[9])
-            self.enabled = self.splitCommaSeparatedInput(list[10])
+            self.memory = self.splitColonSeparatedInput(list[10])
+            self.enabled = self.splitCommaSeparatedInput(list[11])
             self.signalled = self.splitColonSeparatedInput(list[0])
             sanitycheck = self.splitColonSeparatedInput(list[1])
             self.cond = self.splitColonSeparatedInput(list[3])
             self.oncond = self.splitCommaSeparatedInput(list[4])
             assert sanitycheck == self.caller
         else:
-            assert len(list) == 5
+            assert len(list) == 6
             assert "chosen" in list[0]
             assert "caller" in list[1]
             assert "typstr" in list[2]
             assert "idaddr" in list[3]
-            assert "enable" in list[4]
+            assert "memory" in list[4]
+            assert "enable" in list[5]
             self.chosen = self.splitColonSeparatedInput(list[0])
             self.caller = self.splitColonSeparatedInput(list[1])
             self.type = self.splitColonSeparatedInput(list[2])
             self.addr = self.splitColonSeparatedInput(list[3])
-            self.enabled = self.splitCommaSeparatedInput(list[4])
+            self.memory = self.splitColonSeparatedInput(list[4])
+            self.enabled = self.splitCommaSeparatedInput(list[5])
 
     def __repr__(self):
         string = "SchedulePoint(" + "chosen: " + str(self.chosen) + ", "
         string += "caller: " + self.caller + ", "
         string += "type: " + self.type + ", "
         string += "addr: " + self.addr + ", "
+        string += "memory: " + self.memory + ", "
         string += "enabled: " + str(self.enabled) 
 
         if hasattr(self, "signalled"):
@@ -364,24 +369,24 @@ class Schedule:
                 break
             item = schedin.pop(0).strip()
             if "SCHED" in item:
-                assert len(schedin) >= 5
-                tmp_list = schedin[:5]
+                assert len(schedin) >= 6
+                tmp_list = schedin[:6]
                 tmp_point = SchedulePoint(tmp_list)
                 self.schedule.append(tmp_point)
-                schedin = schedin[5:]
+                schedin = schedin[6:]
                 if len(schedin) > 0 and "assert" not in schedin[0]:
                     assert tmp_point.chosen in tmp_point.enabled
             elif "SIGNAL" in item:
-                if len(schedin) < 11:
-                    assert len(schedin) > 5
-                    if "assert" in schedin[5]:
-                        self.error = schedin[5].strip()
+                if len(schedin) < 12:
+                    assert len(schedin) > 6
+                    if "assert" in schedin[6]:
+                        self.error = schedin[6].strip()
                         break
                     assert False
-                tmp_list = schedin[:11]
+                tmp_list = schedin[:12]
                 tmp_point = SchedulePoint(tmp_list)
                 self.schedule.append(tmp_point)
-                schedin = schedin[11:]
+                schedin = schedin[12:]
                 if len(schedin) > 0 and "assert" not in schedin[0]:
                     assert tmp_point.chosen in tmp_point.enabled
                     assert tmp_point.signalled in tmp_point.oncond
@@ -430,6 +435,7 @@ class Schedule:
             fout.write("caller:" + x.caller + "\n")
             fout.write("typstr:" + x.type + "\n")
             fout.write("idaddr:" + x.addr + "\n")
+            fout.write("memory:" + x.memory + "\n")
             fout.write("enable:")
             for thr in x.enabled:
                 fout.write(thr + ",")
