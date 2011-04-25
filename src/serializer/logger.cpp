@@ -526,6 +526,7 @@ void Logger::scheduling(thrID target, SchedPointInfo * s) {
 
     ScheduleDecisionInfo * info; 
     info = new ScheduleDecisionInfo(chosen, caller, desc, id);
+    info->memory_accessed = s->memory_accessed;
     map<thrID, bool>::iterator itr;
     for (itr = s->enabled.begin(); itr != s->enabled.end(); itr++) {
         if (itr->second) {
