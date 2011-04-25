@@ -23,6 +23,7 @@ void StrictTracker::compareScheduleSynchronization(string now, string then) {
     startSynchro = true;
     if (now != then) {
         bool schedulesAreSynchronized = false;
+        printf("now %s then %s\n", now.c_str(), then.c_str());
         safe_assert(schedulesAreSynchronized);
     }
 }
