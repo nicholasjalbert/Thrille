@@ -32,7 +32,6 @@
 
 struct SchedPointInfo {
     void * ret_addr;
-    void* memory_accessed;
     string type;
     thrID thread;
     map<thrID, bool> enabled;
@@ -47,7 +46,6 @@ struct SchedPointInfo {
         thread = thr;
         enabled = en;
         isYield = isy;
-        memory_accessed = NULL;
     }
 };
 
@@ -92,7 +90,6 @@ class ScheduleDecisionInfo: public DecisionInfo {
         vector<thrID> enabled;
 
     public:
-        void* memory_accessed;
         ScheduleDecisionInfo(thrID, thrID, string, void *); 
         virtual void printToFile(FILE *);
         void addEnabledThread(thrID);

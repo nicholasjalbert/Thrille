@@ -24,7 +24,6 @@ void * DecisionInfo::getID() {
 ScheduleDecisionInfo::ScheduleDecisionInfo(thrID _chosen, thrID _caller,
         string _desc, void * _id) : DecisionInfo(_chosen, _caller, _id) {
     description = changeSpacesToUnderscores(_desc);
-    memory_accessed = NULL;
 }
 
 string ScheduleDecisionInfo::changeSpacesToUnderscores(string my_str) {
@@ -43,11 +42,7 @@ void ScheduleDecisionInfo::printToFile(FILE * file) {
     fprintf(file, "caller:%d\n", caller);
     fprintf(file, "typstr:%s\n", description.c_str());
     fprintf(file, "idaddr:%p\n", idaddr);
-    if (memory_accessed != NULL) {
-        fprintf(file, "memory:%p\n", memory_accessed);
-    } else {
-        fprintf(file, "memory:0\n");
-    }
+
     fprintf(file, "enable:");
     vector<thrID>::iterator itr;
     for (itr = enabled.begin(); itr != enabled.end(); itr++) {
