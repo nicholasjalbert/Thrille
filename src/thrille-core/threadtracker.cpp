@@ -1,7 +1,7 @@
 #include "threadtracker.h"
 
 ThreadTracker::ThreadTracker() {
-    curr_id = -1;
+    curr_id = 0;
     Originals::pthread_mutex_init(&threadtracker_mutex, NULL);
 }
 
