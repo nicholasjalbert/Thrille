@@ -285,6 +285,47 @@ class Schedule:
                 checkpoints += 1
         return checkpoints
 
+    def countThreadEvents(self, threadid):
+        total_thread_events = 0
+        for x in self.schedule:
+            if str(x.chosen) == str(threadid):
+                total_thread_events += 1
+        return total_thread_events
+
+    def buildMeAConstraintSystem(self):
+        constraints = ""
+        last_mem_write = {}
+        next_mem_action = {}
+        thread_event_count = {}
+        
+        next_mem_action["0"] = None
+        for x in self.schedule:
+            if x.chosen not in thread_event_count:
+                thread_event_count[x.chosen] = 0
+            thread_event_count[x.chosen] += 1
+
+
+            if x.chosen in next_mem_action:
+                if next_mem_action.get(x.chosen) is not None:
+                    my_mem, is_write = next_mem_action[x.chosen]
+                    if last_mem_write.get(my_mem) is not None:
+                        lw_thread, lw_time = last_mem_write[my_mem]
+                        constraints += "constraint simplified[%s,%s] < simplified[%s,%s];\n" % (lw_thread, lw_time, x.chosen, thread_event_count[x.chosen])
+                    if is_write:
+                        last_mem_write[my_mem] = (x.chosen, thread_event_count[x.chosen])
+
+            if x.memory != "0x0":
+                is_write = True
+                if "Read" in x.type:
+                    is_write = False
+                next_mem_action[x.caller] = (x.memory, is_write)
+            else:
+                next_mem_action[x.caller] = None
+        return constraints
+
+            
+
+
     def getAvgThreadsEnabledAtCS(self):
         total_enabled = 0
         for x in self.schedule:
