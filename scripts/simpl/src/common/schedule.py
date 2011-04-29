@@ -121,6 +121,34 @@ class SchedulePoint:
     def isCheckpoint(self):
         return "Thrille_Checkpoint" in self.type
 
+class ScheduleSegment(object):
+    def __init__(self, _start, _end, _tid, _count, _read, _written):
+        self.start = _start
+        self.end = _end
+        self.tid = _tid
+        self.count = _count
+        self.read = _read
+        self.written = _written
+
+    def __repr__(self):
+        rep = "Segment("
+        rep += "start:" + str(self.start) + ", "
+        rep += "end:" + str(self.end) + ", "
+        rep += "thread:" + str(self.tid) + ", "
+        rep += "count:" + str(self.count) + ", "
+        rep += "read:" + str(self.read) + ", "
+        rep += "written:" + str(self.written) + ")"
+        return rep
+
+    def repOK(segmented_schedule):
+        progress = {}
+        for x in segmented_schedule:
+            if x.tid in progress:
+                assert progress[x.tid] == x.start
+            progress[x.tid] = x.end
+    
+    repOK = staticmethod(repOK)
+
 
 # represents the sum total schedule of a program execution
 # composed of a list of schedule blocks
@@ -292,36 +320,86 @@ class Schedule:
                 total_thread_events += 1
         return total_thread_events
 
+    def segmentSchedule(self):
+        segmented_schedule = []
+        tid_segment_count = {}
+        next_up_read = {}
+        next_up_write = {}
+        next_up_startid = {}
+        if len(self.schedule) == 0:
+            return []
+
+        for event in self.schedule:
+            if event.caller in tid_segment_count:
+                tid_segment_count[event.caller] += 1
+                segmented_schedule.append(ScheduleSegment( \
+                        next_up_startid[event.caller], event.addr, \
+                    event.caller, tid_segment_count[event.caller], \
+                    next_up_read[event.caller], next_up_write[event.caller]))
+            else:
+                tid_segment_count[event.caller] = 1
+                segmented_schedule.append(ScheduleSegment( \
+                        "0x1", event.addr, \
+                    event.caller, tid_segment_count[event.caller], \
+                    set(), set()))
+            if "Write" in event.type:
+                next_up_read[event.caller] = set()
+                next_up_write[event.caller] = set([event.memory])
+            elif "Read" in event.type:
+                next_up_read[event.caller] = set([event.memory])
+                next_up_write[event.caller] = set()
+            else:
+                next_up_read[event.caller] = set()
+                next_up_write[event.caller] = set()
+            next_up_startid[event.caller] = event.addr
+
+        last = self.schedule[-1]
+        tid_segment_count[last.chosen] += 1
+        segmented_schedule.append(ScheduleSegment( \
+                next_up_startid[last.chosen], "0x2", \
+                last.chosen, tid_segment_count[last.chosen], \
+                next_up_read[last.chosen], next_up_write[last.chosen]))
+        ScheduleSegment.repOK(segmented_schedule)
+        return segmented_schedule
+
     def buildMeAConstraintSystem(self):
         constraints = ""
         last_mem_write = {}
         next_mem_action = {}
         thread_event_count = {}
-        
-        next_mem_action["0"] = None
-        for x in self.schedule:
-            if x.chosen not in thread_event_count:
-                thread_event_count[x.chosen] = 0
-            thread_event_count[x.chosen] += 1
+        segmented_schedule = self.segmentSchedule()
 
-
-            if x.chosen in next_mem_action:
-                if next_mem_action.get(x.chosen) is not None:
-                    my_mem, is_write = next_mem_action[x.chosen]
-                    if last_mem_write.get(my_mem) is not None:
-                        lw_thread, lw_time = last_mem_write[my_mem]
-                        constraints += "constraint simplified[%s,%s] < simplified[%s,%s];\n" % (lw_thread, lw_time, x.chosen, thread_event_count[x.chosen])
-                    if is_write:
-                        last_mem_write[my_mem] = (x.chosen, thread_event_count[x.chosen])
-
-            if x.memory != "0x0":
-                is_write = True
-                if "Read" in x.type:
-                    is_write = False
-                next_mem_action[x.caller] = (x.memory, is_write)
-            else:
-                next_mem_action[x.caller] = None
+        for i in range(segmented_schedule):
+            event = segmented_schedule[i]
+            if len(event.read) > 0:
+                read = list(event.read)
+                for x in read:
+                    j = i - 1
+                    while j >= 0:
+                        tmp = segmented_schedule[j]
+                        if x in tmp.write:
+                            contraints += "constraint simplified"
+                            contraints += "[%s,%s]" % (tmp.tid, tmp.count)
+                            contraints += " < simplified["
+                            constraints += "%s,%s" % (event.tid, event.count)
+                            contraints += "]\n"
+                            break
+                        j -= 1
+            if len(event.write) > 0:
+                for x in event.write:
+                    j = i - 1
+                    while j >= 0:
+                        tmp = segmented_schedule[j]
+                        if x in tmp.write or x in tmp.read
+                            contraints += "constraint simplified"
+                            contraints += "[%s,%s]" % (tmp.tid, tmp.count)
+                            contraints += " < simplified["
+                            constraints += "%s,%s" % (event.tid, event.count)
+                            contraints += "]\n"
+                            break
+                        j -= 1
         return constraints
+        
 
             
 
