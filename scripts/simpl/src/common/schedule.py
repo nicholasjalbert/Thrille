@@ -369,7 +369,7 @@ class Schedule:
         thread_event_count = {}
         segmented_schedule = self.segmentSchedule()
 
-        for i in range(segmented_schedule):
+        for i in range(len(segmented_schedule)):
             event = segmented_schedule[i]
             if len(event.read) > 0:
                 read = list(event.read)
@@ -377,32 +377,28 @@ class Schedule:
                     j = i - 1
                     while j >= 0:
                         tmp = segmented_schedule[j]
-                        if x in tmp.write:
-                            contraints += "constraint simplified"
-                            contraints += "[%s,%s]" % (tmp.tid, tmp.count)
-                            contraints += " < simplified["
+                        if x in tmp.written:
+                            constraints += "constraint simplified"
+                            constraints += "[%s,%s]" % (tmp.tid, tmp.count)
+                            constraints += " < simplified["
                             constraints += "%s,%s" % (event.tid, event.count)
-                            contraints += "]\n"
+                            constraints += "];\n"
                             break
                         j -= 1
-            if len(event.write) > 0:
-                for x in event.write:
+            if len(event.written) > 0:
+                for x in event.written:
                     j = i - 1
                     while j >= 0:
                         tmp = segmented_schedule[j]
-                        if x in tmp.write or x in tmp.read
-                            contraints += "constraint simplified"
-                            contraints += "[%s,%s]" % (tmp.tid, tmp.count)
-                            contraints += " < simplified["
+                        if x in tmp.written or x in tmp.read:
+                            constraints += "constraint simplified"
+                            constraints += "[%s,%s]" % (tmp.tid, tmp.count)
+                            constraints += " < simplified["
                             constraints += "%s,%s" % (event.tid, event.count)
-                            contraints += "]\n"
+                            constraints += "];\n"
                             break
                         j -= 1
         return constraints
-        
-
-            
-
 
     def getAvgThreadsEnabledAtCS(self):
         total_enabled = 0
