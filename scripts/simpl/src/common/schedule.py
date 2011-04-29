@@ -400,7 +400,11 @@ class Schedule(object):
     def makeScheduleFromList(thread_list, addrlist, error):
         print "****TODO**** SIGNALS?"
         schedule_list = []
+        
+        # First event is implicit (i.e. first thread executes without being
+        # "scheduled" in Thrille)
         last = str(thread_list[0])
+
         for thread in thread_list[1:]:
             tmp = []
             tmp.append("chosen:%s" % str(thread))
