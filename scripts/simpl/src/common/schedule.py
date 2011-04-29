@@ -153,7 +153,7 @@ class ScheduleSegment(object):
 # represents the sum total schedule of a program execution
 # composed of a list of schedule blocks
 
-class Schedule:
+class Schedule(object):
 
     def __init__(self, file_in = None):
         self.schedule = []
@@ -371,34 +371,43 @@ class Schedule:
 
         for i in range(len(segmented_schedule)):
             event = segmented_schedule[i]
-            if len(event.read) > 0:
-                read = list(event.read)
-                for x in read:
-                    j = i - 1
-                    while j >= 0:
-                        tmp = segmented_schedule[j]
-                        if x in tmp.written:
-                            constraints += "constraint simplified"
-                            constraints += "[%s,%s]" % (tmp.tid, tmp.count)
-                            constraints += " < simplified["
-                            constraints += "%s,%s" % (event.tid, event.count)
-                            constraints += "];\n"
-                            break
-                        j -= 1
-            if len(event.written) > 0:
-                for x in event.written:
-                    j = i - 1
-                    while j >= 0:
-                        tmp = segmented_schedule[j]
-                        if x in tmp.written or x in tmp.read:
-                            constraints += "constraint simplified"
-                            constraints += "[%s,%s]" % (tmp.tid, tmp.count)
-                            constraints += " < simplified["
-                            constraints += "%s,%s" % (event.tid, event.count)
-                            constraints += "];\n"
-                            break
-                        j -= 1
+            for x in event.read:
+                j = i - 1
+                while j >= 0:
+                    tmp = segmented_schedule[j]
+                    if x in tmp.written:
+                        constraints += "constraint simplified"
+                        constraints += "[%s,%s]" % (tmp.tid, tmp.count)
+                        constraints += " < simplified["
+                        constraints += "%s,%s" % (event.tid, event.count)
+                        constraints += "];\n"
+                        break
+                    j -= 1
+            for x in event.written:
+                j = i - 1
+                while j >= 0:
+                    tmp = segmented_schedule[j]
+                    if x in tmp.written or x in tmp.read:
+                        constraints += "constraint simplified"
+                        constraints += "[%s,%s]" % (tmp.tid, tmp.count)
+                        constraints += " < simplified["
+                        constraints += "%s,%s" % (event.tid, event.count)
+                        constraints += "];\n"
+                        break
+                    j -= 1
         return constraints
+
+    def makeScheduleFromList(thread_list, addrlist, error):
+        print addrlist
+        print error
+        print thread_list
+        sched = Schedule()
+        sched.schedule = None
+        sched.error = error
+        sched.addrlist = addrlist
+        return sched
+    
+    makeScheduleFromList = staticmethod(makeScheduleFromList)
 
     def getAvgThreadsEnabledAtCS(self):
         total_enabled = 0
