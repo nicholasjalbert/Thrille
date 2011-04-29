@@ -398,11 +398,21 @@ class Schedule(object):
         return constraints
 
     def makeScheduleFromList(thread_list, addrlist, error):
-        print addrlist
-        print error
-        print thread_list
+        print "****TODO**** SIGNALS?"
+        schedule_list = []
+        last = str(thread_list[0])
+        for thread in thread_list[1:]:
+            tmp = []
+            tmp.append("chosen:%s" % str(thread))
+            tmp.append("caller:%s" % str(last))
+            last = str(thread)
+            tmp.append("typstr:PYTHON_GEN")
+            tmp.append("idaddr:PYTHON_GEN")
+            tmp.append("memory:PYTHON_GEN")
+            tmp.append("enable:PYTHON_GEN")
+            schedule_list.append(SchedulePoint(tmp))
         sched = Schedule()
-        sched.schedule = None
+        sched.schedule = schedule_list
         sched.error = error
         sched.addrlist = addrlist
         return sched
