@@ -19,6 +19,7 @@ void ExecutionTracker::constructorHelper() {
     preemptions = 0;
     nonpreemptions = 0;
     contextswitch = 0;
+    skipped_comparisons = 0;
 }
 
 ExecutionTracker::ExecutionTracker(thrID myself) {
@@ -163,6 +164,11 @@ void ExecutionTracker::destructorHelper() {
     printf("Number of Context Switches: %d\n", contextswitch);
     printf("Number of Preemptions: %d\n", preemptions);
     printf("Number of Non-Preemptive Context Switches: %d\n", nonpreemptions);
+    if (skipped_comparisons > 0) {
+        printf("WARNING: skipped %d schedule ", skipped_comparisons);
+        printf("id comparisons because it appears the scheduling point ");
+        printf("occurred in a dynamically loaded library\n");
+    }
 }
 
 
@@ -1168,7 +1174,13 @@ thrID ExecutionTracker::schedule(SchedPointInfo * s) {
         char buffer[MAX_READ_SIZE];
         sprintf(buffer, "%p", ret_addr);
         string tmp(buffer);
-        compareScheduleSynchronization(tmp, log->getLastID());
+        if (ret_addr < (void*) 0x999999) {
+            compareScheduleSynchronization(tmp, log->getLastID());
+        } else {
+            // heuristically skipping addr comparison 
+            // because statement id looks like it lives in a dynamic library
+            skipped_comparisons++;
+        }
         recordScheduleInfo(myself, nextchoice, type, ret_addr);
     }
     s->enabled = enable_map;

@@ -43,6 +43,7 @@ class ExecutionTracker {
         int preemptions;
         int nonpreemptions;
         int contextswitch;
+        int skipped_comparisons;
         Logger * log;
         BarrierTracker * bt;
         map<thrID, bool> was_signalled_map;
