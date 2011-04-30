@@ -368,7 +368,8 @@ class Schedule(object):
         next_mem_action = {}
         thread_event_count = {}
         segmented_schedule = self.segmentSchedule()
-
+        
+        # memory conflicts
         for i in range(len(segmented_schedule)):
             event = segmented_schedule[i]
             for x in event.read:
@@ -395,6 +396,32 @@ class Schedule(object):
                         constraints += "];\n"
                         break
                     j -= 1
+        # HB thread creation
+        event_count = {}
+        for i in range(len(self.schedule)):
+            event = self.schedule[i]
+            if event.caller not in event_count:
+                event_count[event.caller] = 0
+            event_count[event.caller] += 1
+            if "After_Create" in event.type:
+                if i == 0:
+                    # handled by ensuring the first segment of thread 1 is
+                    # always first
+                    pass
+                else:
+                    prev = self.schedule[i-1]
+                    en_now = set(event.enabled)
+                    en_prev = set(prev.enabled)
+                    created_thread = en_now - en_prev
+                    assert len(created_thread) == 1
+                    created_thread = list(created_thread)[0]
+                    event_id = event_count[event.caller]
+                    constraints += "constraint simplified"
+                    constraints += "[%s,%s]" % (event.caller, event_id)
+                    constraints += " < simplified["
+                    constraints += "%s,1" % created_thread
+                    constraints += "];\n"
+
         return constraints
 
     def makeScheduleFromList(thread_list, addrlist, error):
