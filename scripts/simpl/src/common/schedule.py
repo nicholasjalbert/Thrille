@@ -399,8 +399,13 @@ class Schedule(object):
 
     def makeScheduleFromList(thread_list, addrlist, error):
         print "****TODO**** SIGNALS?"
-        schedule_list = []
-        
+        sched = Schedule()
+        sched.schedule = []
+        sched.error = error
+        sched.addrlist = addrlist
+        if len(thread_list) == 0:
+            return sched
+       
         # First event is implicit (i.e. first thread executes without being
         # "scheduled" in Thrille)
         last = str(thread_list[0])
@@ -411,14 +416,10 @@ class Schedule(object):
             tmp.append("caller:%s" % str(last))
             last = str(thread)
             tmp.append("typstr:PYTHON_GEN")
-            tmp.append("idaddr:PYTHON_GEN")
-            tmp.append("memory:PYTHON_GEN")
+            tmp.append("idaddr:0x99999999")
+            tmp.append("memory:0x99999999")
             tmp.append("enable:PYTHON_GEN")
-            schedule_list.append(SchedulePoint(tmp))
-        sched = Schedule()
-        sched.schedule = schedule_list
-        sched.error = error
-        sched.addrlist = addrlist
+            sched.schedule.append(SchedulePoint(tmp))
         return sched
     
     makeScheduleFromList = staticmethod(makeScheduleFromList)
