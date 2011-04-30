@@ -19,6 +19,8 @@ class StrictTracker: public ExecutionTracker {
         StrictTracker(thrID myself);
         virtual ~StrictTracker();
         bool startSynchro;
+        int successful_comparisons;
+        int skipped_comparisons;
 
     protected:
         virtual thrID pickNextSchedulingChoice(SchedPointInfo *);
