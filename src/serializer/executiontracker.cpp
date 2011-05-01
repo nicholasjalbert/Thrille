@@ -119,7 +119,7 @@ bool ExecutionTracker::BeforeMutexTrylock(thrID myself, void * ret_addr,
     enableThread(myself);
     handleBeforeMutexLock(myself, ret_addr, lock, IS_NOT_COND_WAIT);
     SchedPointInfo tmp(ret_addr, "Before Mutex Try Lock", myself, 
-            enable_map, IS_NOT_YIELD);
+            enable_map, IS_NOT_YIELD, lock);
     schedule(&tmp);
     gunlock();
     pauseThread(myself);
@@ -510,7 +510,7 @@ bool ExecutionTracker::BeforeMutexLock(thrID myself, void * ret_addr,
     handleBeforeMutexLock(myself, ret_addr, lock, isWait);
     if (! isWait) {
         SchedPointInfo tmp(ret_addr, "Before Mutex Lock", myself, 
-                enable_map, IS_NOT_YIELD);
+                enable_map, IS_NOT_YIELD, lock);
         schedule(&tmp);
         gunlock();
         pauseThread(myself);
@@ -613,7 +613,7 @@ void ExecutionTracker::AfterMutexUnlock(thrID myself,
     handleAfterMutexUnlock(myself, ret_addr, lock, isWait);
     if (! isWait) {
         SchedPointInfo tmp(ret_addr, "After Mutex Unlock", myself,
-                enable_map, IS_NOT_YIELD);
+                enable_map, IS_NOT_YIELD, lock);
         schedule(&tmp);
         gunlock();
         pauseThread(myself); 
@@ -1215,7 +1215,7 @@ bool ExecutionTracker::BeforeSemWait(thrID myself, void * ret_addr,
     checkSemValidity(sem);
     determineSemaphoreStatus(myself, sem);
     SchedPointInfo tmp(ret_addr, "Before Sem Wait", 
-            myself, enable_map, IS_NOT_YIELD);
+            myself, enable_map, IS_NOT_YIELD, sem);
     schedule(&tmp);
     gunlock();
     pauseThread(myself);
@@ -1283,7 +1283,7 @@ int ExecutionTracker::SimulateSemPost(thrID myself, void * ret_addr,
     int result = Originals::sem_post(sem);
     semaphoreIsPosted(myself, sem);
     SchedPointInfo tmp(ret_addr, "Simulate Sem Post", myself,
-            enable_map, IS_NOT_YIELD);
+            enable_map, IS_NOT_YIELD, sem);
     schedule(&tmp);
     gunlock();
     pauseThread(myself);
