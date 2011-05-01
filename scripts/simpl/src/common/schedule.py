@@ -342,10 +342,10 @@ class Schedule(object):
                         "0x1", event.addr, \
                     event.caller, tid_segment_count[event.caller], \
                     set(), set()))
-            if "Write" in event.type:
+            if event.memory != "0x0" and "Read" not in event.type:
                 next_up_read[event.caller] = set()
                 next_up_write[event.caller] = set([event.memory])
-            elif "Read" in event.type:
+            elif event.memory != "0x0" and "Read" in event.type:
                 next_up_read[event.caller] = set([event.memory])
                 next_up_write[event.caller] = set()
             else:
