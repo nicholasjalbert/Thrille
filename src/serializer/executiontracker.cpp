@@ -439,7 +439,7 @@ bool ExecutionTracker::BeforeJoin(thrID myself,
     }
     handleBeforeJoin(myself, target, ret_addr);
     SchedPointInfo tmp(ret_addr, "Before Join", myself,
-            enable_map, IS_NOT_YIELD);
+            enable_map, IS_NOT_YIELD, (void*) target);
     schedule(&tmp);
     gunlock();
     pauseThread(myself);
