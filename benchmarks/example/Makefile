@@ -28,4 +28,4 @@ llvm-race: $(RSRCFILE)
 
 
 clean:
-	rm -f bin/* iiddump obj/*
+	rm -f bin/* iiddump obj/* *.save *.schedule my-schedule thrille-sched *.mzn thrille-randomactive
