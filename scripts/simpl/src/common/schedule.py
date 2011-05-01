@@ -326,6 +326,7 @@ class Schedule(object):
         next_up_read = {}
         next_up_write = {}
         next_up_startid = {}
+        join_dict = {}
         if len(self.schedule) == 0:
             return []
 
@@ -342,6 +343,7 @@ class Schedule(object):
                         "0x1", event.addr, \
                     event.caller, tid_segment_count[event.caller], \
                     set(), set()))
+
             if event.memory != "0x0" and "Read" not in event.type:
                 next_up_read[event.caller] = set()
                 next_up_write[event.caller] = set([event.memory])
@@ -362,6 +364,22 @@ class Schedule(object):
         ScheduleSegment.repOK(segmented_schedule)
         return segmented_schedule
 
+    def getJoinDict(self):
+        join_dict = {}
+        tid_segment_count = {}
+        for event in self.schedule:
+            if event.caller in tid_segment_count:
+                tid_segment_count[event.caller] += 1
+            else:
+                tid_segment_count[event.caller] = 1
+            #ugly, record join orders
+            if "Join" in event.type:
+                ev_count = tid_segment_count[event.caller] + 1
+                # ugly way of passing the joined thread
+                assert "0x" in event.memory[:2]
+                join_dict[(event.caller, ev_count)] = event.memory[2:]
+        return join_dict, tid_segment_count
+
     def buildMeAConstraintSystem(self):
         constraints = ""
         last_mem_write = {}
@@ -370,6 +388,7 @@ class Schedule(object):
         segmented_schedule = self.segmentSchedule()
         
         # memory conflicts
+        constraints += "\n% Memory/synchronization constraints\n"
         for i in range(len(segmented_schedule)):
             event = segmented_schedule[i]
             for x in event.read:
@@ -397,6 +416,7 @@ class Schedule(object):
                         break
                     j -= 1
         # HB thread creation
+        constraints += "\n% Creation constraints\n"
         event_count = {}
         for i in range(len(self.schedule)):
             event = self.schedule[i]
@@ -421,6 +441,19 @@ class Schedule(object):
                     constraints += " < simplified["
                     constraints += "%s,1" % created_thread
                     constraints += "];\n"
+
+        # Join HB
+        constraints += "\n% Join constraints\n"
+        join_dict, end_count = self.getJoinDict()
+        for thread, eid in join_dict:
+            target = join_dict[(thread, eid)]
+            constraints += "constraint simplified"
+            constraints += "[%s,%s]" % (target, str(end_count[target]))
+            constraints += " < simplified["
+            constraints += "%s,%s" % (thread, str(eid))
+            constraints += "];\n"
+
+
 
         return constraints
 
