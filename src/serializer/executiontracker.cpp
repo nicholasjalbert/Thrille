@@ -858,7 +858,7 @@ int ExecutionTracker::SimulateCondSignal(thrID myself, void * ret_addr,
     enableThread(myself);
     handleSimulateCondSignal(myself, ret_addr, cond);
     SchedPointInfo tmp2(ret_addr, "Simulate Signal", myself,
-            enable_map, IS_NOT_YIELD);
+            enable_map, IS_NOT_YIELD, cond);
     schedule(&tmp2);
     gunlock();
     pauseThread(myself);
