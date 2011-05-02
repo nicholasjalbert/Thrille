@@ -677,7 +677,7 @@ int ExecutionTracker::SimulateCondWait(thrID myself,
     cond_map[myself] = cond;
     handleSimulateCondWait(myself, ret_addr, cond, lock);
     SchedPointInfo tmp(ret_addr, "Simulate Cond Wait", myself,
-            enable_map, IS_NOT_YIELD);
+            enable_map, IS_NOT_YIELD, cond, lock);
     schedule(&tmp);
     gunlock();
 
@@ -730,7 +730,7 @@ int ExecutionTracker::SimulateCondTimedwait(thrID myself,
     cond_map[myself] = cond;
     handleSimulateCondTimedwait(myself, ret_addr, cond, lock);
     SchedPointInfo tmp(ret_addr, "Simulate Timed Wait (s)",
-            myself, enable_map, IS_YIELD);
+            myself, enable_map, IS_YIELD, cond, lock);
     schedule(&tmp);
     gunlock();
 
@@ -748,7 +748,7 @@ int ExecutionTracker::SimulateCondTimedwait(thrID myself,
     bool was_signalled = was_signalled_map[myself];
     if (! was_signalled) {
         SchedPointInfo tmp(ret_addr, "Simulate Timed Wait (e)",
-                myself, enable_map, IS_NOT_YIELD);
+                myself, enable_map, IS_NOT_YIELD, cond, lock);
         schedule(&tmp);
         was_signalled_map[myself] = true;
     }
@@ -881,7 +881,7 @@ int ExecutionTracker::SimulateCondBroadcast(thrID myself, void * ret_addr,
     enableThread(myself);
     handleSimulateCondBroadcast(myself, ret_addr, cond);
     SchedPointInfo tmp2(ret_addr, "Simulate Broadcast", myself,
-            enable_map, IS_NOT_YIELD);
+            enable_map, IS_NOT_YIELD, cond);
     schedule(&tmp2);
     gunlock();
     pauseThread(myself);
@@ -1353,7 +1353,7 @@ bool ExecutionTracker::BeforeBarrierWait(thrID myself, void * ret_addr,
         disableThread(myself);
     }
     SchedPointInfo tmp(ret_addr, "Before Barrier Wait", myself,
-            enable_map, IS_NOT_YIELD);
+            enable_map, IS_NOT_YIELD, barrier);
     schedule(&tmp);
     gunlock();
     pauseThread(myself);

@@ -169,11 +169,13 @@ void Logger::reconstituteSchedule() {
             thrID caller = parseNextReadfileLineAsThrID();
             string desc = parseNextReadfileLineAsString();
             void* idaddr = parseNextReadfileLineAsVoidStar();
-            void* mem = parseNextReadfileLineAsVoidStar();
+            void* mem_1 = parseNextReadfileLineAsVoidStar();
+            void* mem_2 = parseNextReadfileLineAsVoidStar();
             clearLinesFromReadfile(1);
 
             ScheduleDecisionInfo * info;
-            info = new ScheduleDecisionInfo(chosen, caller, desc, idaddr, mem);
+            info = new ScheduleDecisionInfo(chosen, caller, desc,
+                    idaddr, mem_1, mem_2);
             read_schedule.push_back(info);
         } else {
             safe_assert(strncmp(in, "SIGNAL", 6) == 0);
@@ -524,10 +526,11 @@ void Logger::scheduling(thrID target, SchedPointInfo * s) {
     thrID caller = s->thread;
     string desc = s->type;
     void* id = s->ret_addr;
-    void* mem = s->memory_accessed;
+    void* mem_1 = s->memory_accessed_1;
+    void* mem_2 = s->memory_accessed_2;
 
     ScheduleDecisionInfo * info; 
-    info = new ScheduleDecisionInfo(chosen, caller, desc, id, mem);
+    info = new ScheduleDecisionInfo(chosen, caller, desc, id, mem_1, mem_2);
     map<thrID, bool>::iterator itr;
     for (itr = s->enabled.begin(); itr != s->enabled.end(); itr++) {
         if (itr->second) {
