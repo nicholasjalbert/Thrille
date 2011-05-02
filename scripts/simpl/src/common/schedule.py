@@ -325,13 +325,30 @@ class Schedule(object):
                 total_thread_events += 1
         return total_thread_events
 
+    def getSignalSchedule(self):
+        tid_segment_count = {}
+        signal_dict = {}
+        if len(self.schedule) == 0:
+            return signal_dict
+
+        for event in self.schedule:
+            if event.caller in tid_segment_count:
+                tid_segment_count[event.caller] += 1
+            else:
+                tid_segment_count[event.caller] = 1
+            if event.isSignal():
+                if event.caller not in signal_dict:
+                    signal_dict[event.caller] = {}
+                eid = tid_segment_count[event.caller]
+                signal_dict[event.caller][eid] = event.signalled
+        return signal_dict
+
     def segmentSchedule(self):
         segmented_schedule = []
         tid_segment_count = {}
         next_up_read = {}
         next_up_write = {}
         next_up_startid = {}
-        join_dict = {}
         if len(self.schedule) == 0:
             return []
 
@@ -466,21 +483,35 @@ class Schedule(object):
 
         return constraints
 
-    def makeScheduleFromList(thread_list, addrlist, error):
-        print "****TODO**** SIGNALS?"
+    def makeScheduleFromList(thread_list, signals, addrlist, error):
         sched = Schedule()
         sched.schedule = []
         sched.error = error
         sched.addrlist = addrlist
         if len(thread_list) == 0:
             return sched
+
+        exec_count = {}
        
         # First event is implicit (i.e. first thread executes without being
         # "scheduled" in Thrille)
         last = str(thread_list[0])
+        exec_count[thread_list[0]] = 1 
 
         for thread in thread_list[1:]:
+            if thread not in exec_count:
+                exec_count[thread] = 0
+            exec_count[thread] += 1
+            eid = exec_count[thread]
             tmp = []
+            if thread in signals:
+                if eid in signals[thread]:
+                    print "HEREEEEEEE"
+                    tmp.append("signalled:%s" % str(signals[thread][eid]))
+                    tmp.append("caller:%s" % str(thread))
+                    tmp.append("idaddr:0x99999999" % str(thread))
+                    tmp.append("cond:0x99999999" % str(thread))
+                    tmp.append("oncond:PYTHON_GEN" % str(thread))
             tmp.append("chosen:%s" % str(thread))
             tmp.append("caller:%s" % str(last))
             last = str(thread)
