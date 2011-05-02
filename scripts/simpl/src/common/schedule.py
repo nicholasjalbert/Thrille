@@ -403,7 +403,7 @@ class Schedule(object):
                 # ugly way of passing the joined thread
                 assert "0x" in event.memory_1[:2]
                 assert event.memory_2 == "0x0"
-                join_dict[(event.caller, ev_count)] = event.memory_1[2:]
+                join_dict[(event.caller, ev_count)] = str(int(event.memory_1, 0))
         return join_dict, tid_segment_count
 
     def buildMeAConstraintSystem(self):
