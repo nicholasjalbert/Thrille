@@ -486,8 +486,8 @@ class Schedule(object):
             last = str(thread)
             tmp.append("typstr:PYTHON_GEN")
             tmp.append("idaddr:0x99999999")
-            tmp.append("memory_1:0x99999999")
-            tmp.append("memory_2:0x99999999")
+            tmp.append("memor1:0x99999999")
+            tmp.append("memor2:0x99999999")
             tmp.append("enable:PYTHON_GEN")
             sched.schedule.append(SchedulePoint(tmp))
         return sched
