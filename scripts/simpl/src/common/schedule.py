@@ -18,7 +18,7 @@ class SchedulePoint:
     def __init__(self, list):
         assert len(list) >= 0
         if "signalled" in list[0]:
-            assert len(list) == 12
+            assert len(list) == 13
             assert "signalled" in list[0]
             assert "caller" in list[1]
             assert "idaddr" in list[2]
@@ -30,40 +30,45 @@ class SchedulePoint:
             assert "typstr" in list[8]
             assert "Simulate_Signal" in list[8]
             assert "idaddr" in list[9]
-            assert "memory" in list[10]
-            assert "enable" in list[11]
+            assert "memor1" in list[10]
+            assert "memor2" in list[11]
+            assert "enable" in list[12]
             self.chosen = self.splitColonSeparatedInput(list[6])
             self.caller = self.splitColonSeparatedInput(list[7])
             self.type = self.splitColonSeparatedInput(list[8])
             self.addr = self.splitColonSeparatedInput(list[9])
-            self.memory = self.splitColonSeparatedInput(list[10])
-            self.enabled = self.splitCommaSeparatedInput(list[11])
+            self.memory_1 = self.splitColonSeparatedInput(list[10])
+            self.memory_2 = self.splitColonSeparatedInput(list[11])
+            self.enabled = self.splitCommaSeparatedInput(list[12])
             self.signalled = self.splitColonSeparatedInput(list[0])
             sanitycheck = self.splitColonSeparatedInput(list[1])
             self.cond = self.splitColonSeparatedInput(list[3])
             self.oncond = self.splitCommaSeparatedInput(list[4])
             assert sanitycheck == self.caller
         else:
-            assert len(list) == 6
+            assert len(list) == 7
             assert "chosen" in list[0]
             assert "caller" in list[1]
             assert "typstr" in list[2]
             assert "idaddr" in list[3]
-            assert "memory" in list[4]
-            assert "enable" in list[5]
+            assert "memor1" in list[4]
+            assert "memor2" in list[5]
+            assert "enable" in list[6]
             self.chosen = self.splitColonSeparatedInput(list[0])
             self.caller = self.splitColonSeparatedInput(list[1])
             self.type = self.splitColonSeparatedInput(list[2])
             self.addr = self.splitColonSeparatedInput(list[3])
-            self.memory = self.splitColonSeparatedInput(list[4])
-            self.enabled = self.splitCommaSeparatedInput(list[5])
+            self.memory_1 = self.splitColonSeparatedInput(list[4])
+            self.memory_2 = self.splitColonSeparatedInput(list[5])
+            self.enabled = self.splitCommaSeparatedInput(list[6])
 
     def __repr__(self):
         string = "SchedulePoint(" + "chosen: " + str(self.chosen) + ", "
         string += "caller: " + self.caller + ", "
         string += "type: " + self.type + ", "
         string += "addr: " + self.addr + ", "
-        string += "memory: " + self.memory + ", "
+        string += "memory_1: " + self.memory_1 + ", "
+        string += "memory_2: " + self.memory_2 + ", "
         string += "enabled: " + str(self.enabled) 
 
         if hasattr(self, "signalled"):
@@ -344,11 +349,14 @@ class Schedule(object):
                     event.caller, tid_segment_count[event.caller], \
                     set(), set()))
 
-            if event.memory != "0x0" and "Read" not in event.type:
+            if event.memory_1 != "0x0" and "Read" not in event.type:
                 next_up_read[event.caller] = set()
-                next_up_write[event.caller] = set([event.memory])
-            elif event.memory != "0x0" and "Read" in event.type:
-                next_up_read[event.caller] = set([event.memory])
+                next_up_write[event.caller] = set([event.memory_1])
+                if event.memory_2 != "0x0":
+                    next_up_write[event.caller].add(event.memory_2)
+            elif event.memory_1 != "0x0" and "Read" in event.type:
+                assert event.memory_2 == "0x0"
+                next_up_read[event.caller] = set([event.memory_1])
                 next_up_write[event.caller] = set()
             else:
                 next_up_read[event.caller] = set()
@@ -376,8 +384,9 @@ class Schedule(object):
             if "Join" in event.type:
                 ev_count = tid_segment_count[event.caller] + 1
                 # ugly way of passing the joined thread
-                assert "0x" in event.memory[:2]
-                join_dict[(event.caller, ev_count)] = event.memory[2:]
+                assert "0x" in event.memory_1[:2]
+                assert event.memory_2 == "0x0"
+                join_dict[(event.caller, ev_count)] = event.memory_1[2:]
         return join_dict, tid_segment_count
 
     def buildMeAConstraintSystem(self):
@@ -477,7 +486,8 @@ class Schedule(object):
             last = str(thread)
             tmp.append("typstr:PYTHON_GEN")
             tmp.append("idaddr:0x99999999")
-            tmp.append("memory:0x99999999")
+            tmp.append("memory_1:0x99999999")
+            tmp.append("memory_2:0x99999999")
             tmp.append("enable:PYTHON_GEN")
             sched.schedule.append(SchedulePoint(tmp))
         return sched
@@ -568,24 +578,24 @@ class Schedule(object):
                 break
             item = schedin.pop(0).strip()
             if "SCHED" in item:
-                assert len(schedin) >= 6
-                tmp_list = schedin[:6]
+                assert len(schedin) >= 7
+                tmp_list = schedin[:7]
                 tmp_point = SchedulePoint(tmp_list)
                 self.schedule.append(tmp_point)
-                schedin = schedin[6:]
+                schedin = schedin[7:]
                 if len(schedin) > 0 and "assert" not in schedin[0]:
                     assert tmp_point.chosen in tmp_point.enabled
             elif "SIGNAL" in item:
-                if len(schedin) < 12:
-                    assert len(schedin) > 6
-                    if "assert" in schedin[6]:
-                        self.error = schedin[6].strip()
+                if len(schedin) < 13:
+                    assert len(schedin) > 5
+                    if "assert" in schedin[5]:
+                        self.error = schedin[5].strip()
                         break
                     assert False
-                tmp_list = schedin[:12]
+                tmp_list = schedin[:13]
                 tmp_point = SchedulePoint(tmp_list)
                 self.schedule.append(tmp_point)
-                schedin = schedin[12:]
+                schedin = schedin[13:]
                 if len(schedin) > 0 and "assert" not in schedin[0]:
                     assert tmp_point.chosen in tmp_point.enabled
                     assert tmp_point.signalled in tmp_point.oncond
@@ -634,7 +644,8 @@ class Schedule(object):
             fout.write("caller:" + x.caller + "\n")
             fout.write("typstr:" + x.type + "\n")
             fout.write("idaddr:" + x.addr + "\n")
-            fout.write("memory:" + x.memory + "\n")
+            fout.write("memory_1:" + x.memory_1 + "\n")
+            fout.write("memory_2:" + x.memory_2 + "\n")
             fout.write("enable:")
             for thr in x.enabled:
                 fout.write(thr + ",")
