@@ -335,7 +335,8 @@ class Schedule(object):
             if event.caller in tid_segment_count:
                 tid_segment_count[event.caller] += 1
             else:
-                tid_segment_count[event.caller] = 1
+                #TODO duplicate code
+                tid_segment_count[event.caller] = 0
             if event.isSignal():
                 if event.caller not in signal_dict:
                     signal_dict[event.caller] = {}
@@ -354,13 +355,14 @@ class Schedule(object):
 
         for event in self.schedule:
             if event.caller in tid_segment_count:
+                #TODO code duplication
                 tid_segment_count[event.caller] += 1
                 segmented_schedule.append(ScheduleSegment( \
                         next_up_startid[event.caller], event.addr, \
                     event.caller, tid_segment_count[event.caller], \
                     next_up_read[event.caller], next_up_write[event.caller]))
             else:
-                tid_segment_count[event.caller] = 1
+                tid_segment_count[event.caller] = 0
                 segmented_schedule.append(ScheduleSegment( \
                         "0x1", event.addr, \
                     event.caller, tid_segment_count[event.caller], \
@@ -396,7 +398,8 @@ class Schedule(object):
             if event.caller in tid_segment_count:
                 tid_segment_count[event.caller] += 1
             else:
-                tid_segment_count[event.caller] = 1
+                #TODO duplicate code
+                tid_segment_count[event.caller] = 0
             #ugly, record join orders
             if "Join" in event.type:
                 ev_count = tid_segment_count[event.caller] + 1
@@ -483,6 +486,103 @@ class Schedule(object):
 
         return constraints
 
+
+    def buildMeACPPConstraintSystem(self):
+        constraints = ""
+        last_mem_write = {}
+        next_mem_action = {}
+        thread_event_count = {}
+        segmented_schedule = self.segmentSchedule()
+        
+        # memory conflicts
+        constraints += "\n    // Memory/synchronization constraints\n"
+        for i in range(len(segmented_schedule)):
+            event = segmented_schedule[i]
+            for x in event.read:
+                j = i - 1
+                while j >= 0:
+                    tmp = segmented_schedule[j]
+                    if x in tmp.written:
+                        constraints += "    if (threads"
+                        constraints += "[%d][%d]" % (tmp.tid-1, tmp.count)
+                        constraints += " != UNASSIGNED && threads"
+                        constraints += "[%d][%d]" % (event.tid-1, event.count)
+                        constraints += " != UNASSIGNED) {\n" 
+                        constraints += "        result &= threads"
+                        constraints += "[%d][%d]" % (tmp.tid-1, tmp.count)
+                        constraints += " < threads"
+                        constraints += "[%d][%d];\n" % (event.tid-1, event.count)
+                        constraints += "    }\n"
+                        break
+                    j -= 1
+            for x in event.written:
+                j = i - 1
+                while j >= 0:
+                    tmp = segmented_schedule[j]
+                    if x in tmp.written or x in tmp.read:
+                        constraints += "    if (threads"
+                        constraints += "[%d][%d]" % (int(tmp.tid) - 1, tmp.count)
+                        constraints += " != UNASSIGNED && threads"
+                        constraints += "[%d][%d]" % (int(event.tid) - 1, event.count)
+                        constraints += " != UNASSIGNED) {\n" 
+                        constraints += "        result &= threads"
+                        constraints += "[%d][%d]" % (int(tmp.tid) - 1, tmp.count)
+                        constraints += " < threads"
+                        constraints += "[%d][%d];\n" % (int(event.tid) - 1, event.count)
+                        constraints += "    }\n"
+                        break
+                    j -= 1
+        # HB thread creation
+        constraints += "\n    // Creation constraints\n"
+        event_count = {}
+        for i in range(len(self.schedule)):
+            event = self.schedule[i]
+            if event.caller not in event_count:
+                event_count[event.caller] = 0
+            event_count[event.caller] += 1
+            if "After_Create" in event.type:
+                if i == 0:
+                    # handled by ensuring the first segment of thread 1 is
+                    # always first
+                    pass
+                else:
+                    prev = self.schedule[i-1]
+                    en_now = set(event.enabled)
+                    en_prev = set(prev.enabled)
+                    created_thread = en_now - en_prev
+                    assert len(created_thread) == 1
+                    created_thread = list(created_thread)[0]
+                    event_id = event_count[event.caller]
+                    constraints += "    if (threads"
+                    constraints += "[%d][%d]" % (int(event.caller) - 1, event_id)
+                    constraints += " != UNASSIGNED && threads"
+                    constraints += "[%d][0]" % (int(created_thread) - 1)
+                    constraints += " != UNASSIGNED) {\n" 
+                    constraints += "        result &= threads"
+                    constraints += "[%d][%d]" % (int(event.caller) - 1, event_id)
+                    constraints += " < threads"
+                    constraints += "[%d][0];\n" % (int(created_thread) - 1)
+                    constraints += "    }\n"
+
+        # Join HB
+        constraints += "\n    // Join constraints\n"
+        join_dict, end_count = self.getJoinDict()
+        for thread, eid in join_dict:
+            target = join_dict[(thread, eid)]
+            constraints += "    if (threads"
+            constraints += "[%d][%s]" % (int(target) - 1, str(end_count[target]))
+            constraints += " != UNASSIGNED && threads"
+            constraints += "[%d][%s]" % (int(thread) - 1, str(eid))
+            constraints += " != UNASSIGNED) {\n" 
+            constraints += "        result &= threads"
+            constraints += "[%d][%s]" % (int(target) - 1, str(end_count[target]))
+            constraints += " < threads"
+            constraints += "[%d][%s];\n" % (int(thread) - 1, str(eid))
+            constraints += "    }\n"
+
+        return constraints
+
+
     def makeScheduleFromList(thread_list, signals, addrlist, error):
         sched = Schedule()
         sched.schedule = []
@@ -509,9 +609,9 @@ class Schedule(object):
                     print "HEREEEEEEE"
                     tmp.append("signalled:%s" % str(signals[thread][eid]))
                     tmp.append("caller:%s" % str(thread))
-                    tmp.append("idaddr:0x99999999" % str(thread))
-                    tmp.append("cond:0x99999999" % str(thread))
-                    tmp.append("oncond:PYTHON_GEN" % str(thread))
+                    tmp.append("idaddr:0x99999999")
+                    tmp.append("cond:0x99999999")
+                    tmp.append("oncond:PYTHON_GEN")
             tmp.append("chosen:%s" % str(thread))
             tmp.append("caller:%s" % str(last))
             last = str(thread)
