@@ -488,14 +488,13 @@ class Schedule(object):
 
 
     def buildMeACPPConstraintSystem(self):
-        constraints = ""
         last_mem_write = {}
         next_mem_action = {}
         thread_event_count = {}
         segmented_schedule = self.segmentSchedule()
         
         # memory conflicts
-        constraints += "\n    // Memory/synchronization constraints\n"
+        constraints = []
         for i in range(len(segmented_schedule)):
             event = segmented_schedule[i]
             for x in event.read:
@@ -503,16 +502,17 @@ class Schedule(object):
                 while j >= 0:
                     tmp = segmented_schedule[j]
                     if x in tmp.written:
-                        constraints += "    if (threads"
-                        constraints += "[%d][%d]" % (tmp.tid-1, tmp.count)
-                        constraints += " != UNASSIGNED && threads"
-                        constraints += "[%d][%d]" % (event.tid-1, event.count)
-                        constraints += " != UNASSIGNED) {\n" 
-                        constraints += "        result &= threads"
-                        constraints += "[%d][%d]" % (tmp.tid-1, tmp.count)
-                        constraints += " < threads"
-                        constraints += "[%d][%d];\n" % (event.tid-1, event.count)
-                        constraints += "    }\n"
+                        #constraints += "    if (threads"
+                        #constraints += "[%d][%d]" % (tmp.tid-1, tmp.count)
+                        #constraints += " != UNASSIGNED && threads"
+                        #constraints += "[%d][%d]" % (event.tid-1, event.count)
+                        #constraints += " != UNASSIGNED) {\n" 
+                        #constraints += "        result &= threads"
+                        #constraints += "[%d][%d]" % (tmp.tid-1, tmp.count)
+                        #constraints += " < threads"
+                        #constraints += "[%d][%d];\n" % (event.tid-1, event.count)
+                        #constraints += "    }\n"
+                        constraints.append((int(tmp.tid-1), int(tmp.count), int(event.tid-1), int(event.count)))
                         break
                     j -= 1
             for x in event.written:
@@ -520,20 +520,20 @@ class Schedule(object):
                 while j >= 0:
                     tmp = segmented_schedule[j]
                     if x in tmp.written or x in tmp.read:
-                        constraints += "    if (threads"
-                        constraints += "[%d][%d]" % (int(tmp.tid) - 1, tmp.count)
-                        constraints += " != UNASSIGNED && threads"
-                        constraints += "[%d][%d]" % (int(event.tid) - 1, event.count)
-                        constraints += " != UNASSIGNED) {\n" 
-                        constraints += "        result &= threads"
-                        constraints += "[%d][%d]" % (int(tmp.tid) - 1, tmp.count)
-                        constraints += " < threads"
-                        constraints += "[%d][%d];\n" % (int(event.tid) - 1, event.count)
-                        constraints += "    }\n"
+                        #constraints += "    if (threads"
+                        #constraints += "[%d][%d]" % (int(tmp.tid) - 1, tmp.count)
+                        #constraints += " != UNASSIGNED && threads"
+                        #constraints += "[%d][%d]" % (int(event.tid) - 1, event.count)
+                        #constraints += " != UNASSIGNED) {\n" 
+                        #constraints += "        result &= threads"
+                        #constraints += "[%d][%d]" % (int(tmp.tid) - 1, tmp.count)
+                        #constraints += " < threads"
+                        #constraints += "[%d][%d];\n" % (int(event.tid) - 1, event.count)
+                        #constraints += "    }\n"
+                        constraints.append((int(tmp.tid) - 1, int(tmp.count), int(event.tid) - 1, int(event.count)))
                         break
                     j -= 1
         # HB thread creation
-        constraints += "\n    // Creation constraints\n"
         event_count = {}
         for i in range(len(self.schedule)):
             event = self.schedule[i]
@@ -553,32 +553,33 @@ class Schedule(object):
                     assert len(created_thread) == 1
                     created_thread = list(created_thread)[0]
                     event_id = event_count[event.caller]
-                    constraints += "    if (threads"
-                    constraints += "[%d][%d]" % (int(event.caller) - 1, event_id)
-                    constraints += " != UNASSIGNED && threads"
-                    constraints += "[%d][0]" % (int(created_thread) - 1)
-                    constraints += " != UNASSIGNED) {\n" 
-                    constraints += "        result &= threads"
-                    constraints += "[%d][%d]" % (int(event.caller) - 1, event_id)
-                    constraints += " < threads"
-                    constraints += "[%d][0];\n" % (int(created_thread) - 1)
-                    constraints += "    }\n"
+                    #constraints += "    if (threads"
+                    #constraints += "[%d][%d]" % (int(event.caller) - 1, event_id)
+                    #constraints += " != UNASSIGNED && threads"
+                    #constraints += "[%d][0]" % (int(created_thread) - 1)
+                    #constraints += " != UNASSIGNED) {\n" 
+                    #constraints += "        result &= threads"
+                    #constraints += "[%d][%d]" % (int(event.caller) - 1, event_id)
+                    #constraints += " < threads"
+                    #constraints += "[%d][0];\n" % (int(created_thread) - 1)
+                    #constraints += "    }\n"
+                    constraints.append((int(event.caller) - 1, int(event_id), int(created_thread) - 1, 0))
 
         # Join HB
-        constraints += "\n    // Join constraints\n"
         join_dict, end_count = self.getJoinDict()
         for thread, eid in join_dict:
             target = join_dict[(thread, eid)]
-            constraints += "    if (threads"
-            constraints += "[%d][%s]" % (int(target) - 1, str(end_count[target]))
-            constraints += " != UNASSIGNED && threads"
-            constraints += "[%d][%s]" % (int(thread) - 1, str(eid))
-            constraints += " != UNASSIGNED) {\n" 
-            constraints += "        result &= threads"
-            constraints += "[%d][%s]" % (int(target) - 1, str(end_count[target]))
-            constraints += " < threads"
-            constraints += "[%d][%s];\n" % (int(thread) - 1, str(eid))
-            constraints += "    }\n"
+            #constraints += "    if (threads"
+            #constraints += "[%d][%s]" % (int(target) - 1, str(end_count[target]))
+            #constraints += " != UNASSIGNED && threads"
+            #constraints += "[%d][%s]" % (int(thread) - 1, str(eid))
+            #constraints += " != UNASSIGNED) {\n" 
+            #constraints += "        result &= threads"
+            #constraints += "[%d][%s]" % (int(target) - 1, str(end_count[target]))
+            #constraints += " < threads"
+            #constraints += "[%d][%s];\n" % (int(thread) - 1, str(eid))
+            #constraints += "    }\n"
+            constraints.append((int(target) - 1, int(end_count[target]), int(thread) - 1, int(eid)))
 
         return constraints
 
