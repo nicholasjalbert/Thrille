@@ -145,9 +145,9 @@ class ScheduleSegment(object):
         rep += "thread:" + str(self.tid) + ", "
         rep += "count:" + str(self.count) + ", "
         rep += "read:" + str(self.read) + ", "
-        rep += "written:" + str(self.written) + ")"
-        rep += "joined:" + str(self.joined) + ")"
-        rep += "created:" + str(self.created) + ")"
+        rep += "written:" + str(self.written) + ", "
+        rep += "joined:" + str(self.joined) + ", "
+        rep += "created:" + str(self.created) + ", "
         rep += "enabled:" + str(self.enabled) + ")"
         return rep
 
@@ -370,9 +370,12 @@ class Schedule(object):
                 if "Create" in event.type:
                     created = set(event.enabled) - set(prev_en) 
                     assert len(created) == 1
-                    created = created[0]
+                    created = list(created)[0]
                 if event.caller in join_dict:
                     joined = join_dict[event.caller]
+                    join_str = "0x%s" % joined
+                    assert join_str in next_up_write[event.caller]
+                    next_up_write[event.caller] -= set([join_str])
                     del join_dict[event.caller]
                 tid_segment_count[event.caller] += 1
                 segmented_schedule.append(ScheduleSegment( \
@@ -517,12 +520,9 @@ class Schedule(object):
 
 
     def buildMeACPPConstraintSystem(self):
-        last_mem_write = {}
-        next_mem_action = {}
-        thread_event_count = {}
         segmented_schedule = self.segmentSchedule()
         
-        # memory conflicts
+        # Memory conflict HB
         constraints = []
         for i in range(len(segmented_schedule)):
             event = segmented_schedule[i]
@@ -550,42 +550,33 @@ class Schedule(object):
                         constraints.append((ft, fe, st, se))
                         break
                     j -= 1
-        # HB thread creation
-        event_count = {}
-        for i in range(len(self.schedule)):
-            event = self.schedule[i]
-            if event.caller not in event_count:
-                event_count[event.caller] = 0
-            event_count[event.caller] += 1
-            if "After_Create" in event.type:
-                if i == 0:
-                    # handled by ensuring the first segment of thread 1 is
-                    # always first
-                    pass
-                else:
-                    prev = self.schedule[i-1]
-                    en_now = set(event.enabled)
-                    en_prev = set(prev.enabled)
-                    created_thread = en_now - en_prev
-                    assert len(created_thread) == 1
-                    created_thread = list(created_thread)[0]
-                    event_id = event_count[event.caller]
-                    ft = int(event.caller) - 1
-                    fe = int(event_id)
-                    st = int(created_thread) - 1
-                    se = 0
-                    constraints.append((ft, fe, st, se))
+
+        # Create HB
+        for x in segmented_schedule:
+            if x.created != None:
+                ft = int(x.tid) - 1
+                fe = int(x.count)
+                st = int(x.created) - 1
+                se = 0
+                constraints.append((ft, fe, st, se))
 
         # Join HB
-        join_dict, end_count = self.getJoinDict()
-        for thread, eid in join_dict:
-            target = join_dict[(thread, eid)]
-            ft = int(target) - 1
-            fe = int(end_count[target])
-            st = int(thread) - 1
-            se = int(eid)
-            constraints.append((ft, fe, st, se))
-
+        for i in range(len(segmented_schedule)):
+            x = segmented_schedule[i]
+            if x.joined != None:
+                ft = int(x.joined) - 1
+                fe = None
+                j = i - 1
+                while j >= 0:
+                    if int(segmented_schedule[j].tid) == int(x.joined):
+                        fe = int(segmented_schedule[j].count)
+                        break;
+                    j -= 1
+                else:
+                    assert False, "joining thread not found"
+                st = int(x.tid) - 1
+                se = int(x.count)
+                constraints.append((ft, fe, st, se))
         return constraints
 
     def getInitialSearchStack(self):
