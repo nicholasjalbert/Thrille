@@ -127,13 +127,15 @@ class SchedulePoint:
         return "Thrille_Checkpoint" in self.type
 
 class ScheduleSegment(object):
-    def __init__(self, _start, _end, _tid, _count, _read, _written, _en):
+    def __init__(self, _start, _end, _tid, _count, _read, _written, _join, _create, _en):
         self.start = _start
         self.end = _end
         self.tid = _tid
         self.count = _count
         self.read = _read
         self.written = _written
+        self.joined = _join
+        self.created = _create
         self.enabled = _en
 
     def __repr__(self):
@@ -144,13 +146,14 @@ class ScheduleSegment(object):
         rep += "count:" + str(self.count) + ", "
         rep += "read:" + str(self.read) + ", "
         rep += "written:" + str(self.written) + ")"
+        rep += "joined:" + str(self.joined) + ")"
+        rep += "created:" + str(self.created) + ")"
         rep += "enabled:" + str(self.enabled) + ")"
         return rep
 
     def repOK(segmented_schedule):
         progress = {}
         for x in segmented_schedule:
-            print x
             if x.tid in progress:
                 assert progress[x.tid] == x.start
             progress[x.tid] = x.end
@@ -358,24 +361,37 @@ class Schedule(object):
             return []
 
         prev_en = ["1"]
+        join_dict = {}
 
         for event in self.schedule:
             if event.caller in tid_segment_count:
-                #TODO code duplication
+                created = None
+                joined = None
+                if "Create" in event.type:
+                    created = set(event.enabled) - set(prev_en) 
+                    assert len(created) == 1
+                    created = created[0]
+                if event.caller in join_dict:
+                    joined = join_dict[event.caller]
+                    del join_dict[event.caller]
                 tid_segment_count[event.caller] += 1
                 segmented_schedule.append(ScheduleSegment( \
                         next_up_startid[event.caller], event.addr, \
                     event.caller, tid_segment_count[event.caller], \
                     next_up_read[event.caller], next_up_write[event.caller], \
-                    prev_en))
+                    joined, created, prev_en))
             else:
                 tid_segment_count[event.caller] = 0
                 segmented_schedule.append(ScheduleSegment( \
                         "0x1", event.addr, \
                     event.caller, tid_segment_count[event.caller], \
-                    set(), set(), prev_en))
+                    set(), set(), None, None, prev_en))
 
             prev_en = event.enabled
+            if "Join" in event.type:
+                assert "0x" in event.memory_1[:2]
+                assert event.memory_2 == "0x0"
+                join_dict[event.caller] = str(int(event.memory_1,0))
 
             if event.memory_1 != "0x0" and "Read" not in event.type:
                 next_up_read[event.caller] = set()
@@ -393,11 +409,14 @@ class Schedule(object):
 
         last = self.schedule[-1]
         tid_segment_count[last.chosen] += 1
+        joined = None
+        if last.chosen in join_dict:
+            joined = join_dict[last.chosen]
         segmented_schedule.append(ScheduleSegment( \
                 next_up_startid[last.chosen], "0x2", \
                 last.chosen, tid_segment_count[last.chosen], \
                 next_up_read[last.chosen], next_up_write[last.chosen], \
-                last.enabled))
+                joined, None, last.enabled))
         ScheduleSegment.repOK(segmented_schedule)
         return segmented_schedule
 
