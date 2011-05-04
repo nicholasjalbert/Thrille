@@ -586,9 +586,9 @@ class Schedule(object):
         for x in segmented_schedule:
             new_en = []
             for y in x.enabled:
-                new_en.append(int(y))
-            new_en.remove(int(x.tid))
-            stack.append((total_events, int(x.count), int(x.tid), new_en))
+                new_en.append(int(y) - 1)
+            new_en.remove(int(x.tid) - 1)
+            stack.append((total_events, int(x.count), int(x.tid) - 1, new_en))
             total_events += 1
         return stack
 
