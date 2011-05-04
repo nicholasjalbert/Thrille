@@ -127,13 +127,14 @@ class SchedulePoint:
         return "Thrille_Checkpoint" in self.type
 
 class ScheduleSegment(object):
-    def __init__(self, _start, _end, _tid, _count, _read, _written):
+    def __init__(self, _start, _end, _tid, _count, _read, _written, _en):
         self.start = _start
         self.end = _end
         self.tid = _tid
         self.count = _count
         self.read = _read
         self.written = _written
+        self.enabled = _en
 
     def __repr__(self):
         rep = "Segment("
@@ -143,14 +144,17 @@ class ScheduleSegment(object):
         rep += "count:" + str(self.count) + ", "
         rep += "read:" + str(self.read) + ", "
         rep += "written:" + str(self.written) + ")"
+        rep += "enabled:" + str(self.enabled) + ")"
         return rep
 
     def repOK(segmented_schedule):
         progress = {}
         for x in segmented_schedule:
+            print x
             if x.tid in progress:
                 assert progress[x.tid] == x.start
             progress[x.tid] = x.end
+            assert x.tid in x.enabled
     
     repOK = staticmethod(repOK)
 
@@ -353,6 +357,8 @@ class Schedule(object):
         if len(self.schedule) == 0:
             return []
 
+        prev_en = ["1"]
+
         for event in self.schedule:
             if event.caller in tid_segment_count:
                 #TODO code duplication
@@ -360,13 +366,16 @@ class Schedule(object):
                 segmented_schedule.append(ScheduleSegment( \
                         next_up_startid[event.caller], event.addr, \
                     event.caller, tid_segment_count[event.caller], \
-                    next_up_read[event.caller], next_up_write[event.caller]))
+                    next_up_read[event.caller], next_up_write[event.caller], \
+                    prev_en))
             else:
                 tid_segment_count[event.caller] = 0
                 segmented_schedule.append(ScheduleSegment( \
                         "0x1", event.addr, \
                     event.caller, tid_segment_count[event.caller], \
-                    set(), set()))
+                    set(), set(), prev_en))
+
+            prev_en = event.enabled
 
             if event.memory_1 != "0x0" and "Read" not in event.type:
                 next_up_read[event.caller] = set()
@@ -387,7 +396,8 @@ class Schedule(object):
         segmented_schedule.append(ScheduleSegment( \
                 next_up_startid[last.chosen], "0x2", \
                 last.chosen, tid_segment_count[last.chosen], \
-                next_up_read[last.chosen], next_up_write[last.chosen]))
+                next_up_read[last.chosen], next_up_write[last.chosen], \
+                last.enabled))
         ScheduleSegment.repOK(segmented_schedule)
         return segmented_schedule
 
@@ -559,6 +569,18 @@ class Schedule(object):
 
         return constraints
 
+    def getInitialSearchStack(self):
+        segmented_schedule = self.segmentSchedule()
+        stack = []
+        total_events = 0
+        for x in segmented_schedule:
+            new_en = []
+            for y in x.enabled:
+                new_en.append(int(y))
+            new_en.remove(int(x.tid))
+            stack.append((total_events, int(x.count), int(x.tid), new_en))
+            total_events += 1
+        return stack
 
     def makeScheduleFromList(thread_list, signals, addrlist, error):
         sched = Schedule()
