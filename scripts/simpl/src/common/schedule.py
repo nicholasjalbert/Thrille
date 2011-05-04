@@ -373,7 +373,7 @@ class Schedule(object):
                     created = list(created)[0]
                 if event.caller in join_dict:
                     joined = join_dict[event.caller]
-                    join_str = "0x%s" % joined
+                    join_str = hex(int(joined))
                     assert join_str in next_up_write[event.caller]
                     next_up_write[event.caller] -= set([join_str])
                     del join_dict[event.caller]
