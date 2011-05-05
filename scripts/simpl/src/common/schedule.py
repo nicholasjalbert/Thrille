@@ -325,12 +325,7 @@ class Schedule(object):
                 checkpoints += 1
         return checkpoints
 
-    def countThreadEvents(self, threadid):
-        total_thread_events = 0
-        for x in self.schedule:
-            if str(x.chosen) == str(threadid):
-                total_thread_events += 1
-        return total_thread_events
+
 
     def getSignalSchedule(self):
         tid_segment_count = {}
@@ -422,104 +417,32 @@ class Schedule(object):
                 joined, None, last.enabled))
         ScheduleSegment.repOK(segmented_schedule)
         return segmented_schedule
-
-    def getJoinDict(self):
-        join_dict = {}
-        tid_segment_count = {}
-        for event in self.schedule:
-            if event.caller in tid_segment_count:
-                tid_segment_count[event.caller] += 1
-            else:
-                #TODO duplicate code
-                tid_segment_count[event.caller] = 0
-            #ugly, record join orders
-            if "Join" in event.type:
-                ev_count = tid_segment_count[event.caller] + 1
-                # ugly way of passing the joined thread
-                assert "0x" in event.memory_1[:2]
-                assert event.memory_2 == "0x0"
-                join_dict[(event.caller, ev_count)] = str(int(event.memory_1, 0))
-        return join_dict, tid_segment_count
-
-    def buildMeAConstraintSystem(self):
-        constraints = ""
-        last_mem_write = {}
-        next_mem_action = {}
-        thread_event_count = {}
+    
+    def countThreadEvents(self, threadid):
         segmented_schedule = self.segmentSchedule()
+        segmented_schedule.reverse()
+        for x in segmented_schedule:
+            if int(x.tid) == int(threadid):
+                return x.count + 1
+        assert False, "thread %s not found!" % str(threadid)
+
+
+
+    # -returns a list of tuples:
+    #     (first_thread_id, first_event_id, second_thread_id, second_event_id)
+    # -thread_idx determines whether thread_ids start at 0 or 1
+    # -event_idx determines whether per-thread event_ids start at 0 or 1
+    def getHBConstraints(self, thread_idx, event_idx):
+        thread_idx = int(thread_idx)
+        assert thread_idx == 0 or thread_idx == 1
+        t_mod = 0
+        if thread_idx == 0:
+            t_mod = 1
+
+        event_idx = int(event_idx)
+        assert event_idx == 0 or event_idx == 1
+        e_mod = event_idx
         
-        # memory conflicts
-        constraints += "\n% Memory/synchronization constraints\n"
-        for i in range(len(segmented_schedule)):
-            event = segmented_schedule[i]
-            for x in event.read:
-                j = i - 1
-                while j >= 0:
-                    tmp = segmented_schedule[j]
-                    if x in tmp.written:
-                        constraints += "constraint simplified"
-                        constraints += "[%s,%s]" % (tmp.tid, tmp.count)
-                        constraints += " < simplified["
-                        constraints += "%s,%s" % (event.tid, event.count)
-                        constraints += "];\n"
-                        break
-                    j -= 1
-            for x in event.written:
-                j = i - 1
-                while j >= 0:
-                    tmp = segmented_schedule[j]
-                    if x in tmp.written or x in tmp.read:
-                        constraints += "constraint simplified"
-                        constraints += "[%s,%s]" % (tmp.tid, tmp.count)
-                        constraints += " < simplified["
-                        constraints += "%s,%s" % (event.tid, event.count)
-                        constraints += "];\n"
-                        break
-                    j -= 1
-        # HB thread creation
-        constraints += "\n% Creation constraints\n"
-        event_count = {}
-        for i in range(len(self.schedule)):
-            event = self.schedule[i]
-            if event.caller not in event_count:
-                event_count[event.caller] = 0
-            event_count[event.caller] += 1
-            if "After_Create" in event.type:
-                if i == 0:
-                    # handled by ensuring the first segment of thread 1 is
-                    # always first
-                    pass
-                else:
-                    prev = self.schedule[i-1]
-                    en_now = set(event.enabled)
-                    en_prev = set(prev.enabled)
-                    created_thread = en_now - en_prev
-                    assert len(created_thread) == 1
-                    created_thread = list(created_thread)[0]
-                    event_id = event_count[event.caller]
-                    constraints += "constraint simplified"
-                    constraints += "[%s,%s]" % (event.caller, event_id)
-                    constraints += " < simplified["
-                    constraints += "%s,1" % created_thread
-                    constraints += "];\n"
-
-        # Join HB
-        constraints += "\n% Join constraints\n"
-        join_dict, end_count = self.getJoinDict()
-        for thread, eid in join_dict:
-            target = join_dict[(thread, eid)]
-            constraints += "constraint simplified"
-            constraints += "[%s,%s]" % (target, str(end_count[target]))
-            constraints += " < simplified["
-            constraints += "%s,%s" % (thread, str(eid))
-            constraints += "];\n"
-
-
-
-        return constraints
-
-
-    def buildMeACPPConstraintSystem(self):
         segmented_schedule = self.segmentSchedule()
         
         # Memory conflict HB
@@ -531,10 +454,10 @@ class Schedule(object):
                 while j >= 0:
                     tmp = segmented_schedule[j]
                     if x in tmp.written:
-                        ft = int(tmp.tid) - 1
-                        fe = int(tmp.count)
-                        st = int(event.tid) - 1 
-                        se = int(event.count)
+                        ft = int(tmp.tid) - t_mod
+                        fe = int(tmp.count) + e_mod
+                        st = int(event.tid) - t_mod
+                        se = int(event.count) + e_mod
                         constraints.append((ft, fe, st, se))
                         break
                     j -= 1
@@ -543,10 +466,10 @@ class Schedule(object):
                 while j >= 0:
                     tmp = segmented_schedule[j]
                     if x in tmp.written or x in tmp.read:
-                        ft = int(tmp.tid) - 1
-                        fe = int(tmp.count)
-                        st = int(event.tid) - 1
-                        se = int(event.count)
+                        ft = int(tmp.tid) - t_mod
+                        fe = int(tmp.count) + e_mod
+                        st = int(event.tid) - t_mod
+                        se = int(event.count) + e_mod
                         constraints.append((ft, fe, st, se))
                         break
                     j -= 1
@@ -554,28 +477,28 @@ class Schedule(object):
         # Create HB
         for x in segmented_schedule:
             if x.created != None:
-                ft = int(x.tid) - 1
-                fe = int(x.count)
-                st = int(x.created) - 1
-                se = 0
+                ft = int(x.tid) - t_mod
+                fe = int(x.count) + e_mod
+                st = int(x.created) - t_mod
+                se = 0 + e_mod
                 constraints.append((ft, fe, st, se))
 
         # Join HB
         for i in range(len(segmented_schedule)):
             x = segmented_schedule[i]
             if x.joined != None:
-                ft = int(x.joined) - 1
+                ft = int(x.joined) - t_mod
                 fe = None
                 j = i - 1
                 while j >= 0:
                     if int(segmented_schedule[j].tid) == int(x.joined):
-                        fe = int(segmented_schedule[j].count)
+                        fe = int(segmented_schedule[j].count) + e_mod
                         break;
                     j -= 1
                 else:
                     assert False, "joining thread not found"
-                st = int(x.tid) - 1
-                se = int(x.count)
+                st = int(x.tid) - t_mod
+                se = int(x.count) + e_mod
                 constraints.append((ft, fe, st, se))
         return constraints
 
