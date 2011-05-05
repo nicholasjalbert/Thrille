@@ -67,8 +67,8 @@ class SchedulePoint:
         string += "caller: " + self.caller + ", "
         string += "type: " + self.type + ", "
         string += "addr: " + self.addr + ", "
-        string += "memory_1: " + self.memory_1 + ", "
-        string += "memory_2: " + self.memory_2 + ", "
+        string += "memor1: " + self.memory_1 + ", "
+        string += "memor2: " + self.memory_2 + ", "
         string += "enabled: " + str(self.enabled) 
 
         if hasattr(self, "signalled"):
@@ -707,8 +707,8 @@ class Schedule(object):
             fout.write("caller:" + x.caller + "\n")
             fout.write("typstr:" + x.type + "\n")
             fout.write("idaddr:" + x.addr + "\n")
-            fout.write("memory_1:" + x.memory_1 + "\n")
-            fout.write("memory_2:" + x.memory_2 + "\n")
+            fout.write("memor1:" + x.memory_1 + "\n")
+            fout.write("memor2:" + x.memory_2 + "\n")
             fout.write("enable:")
             for thr in x.enabled:
                 fout.write(thr + ",")
