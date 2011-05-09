@@ -127,7 +127,7 @@ class SchedulePoint:
         return "Thrille_Checkpoint" in self.type
 
 class ScheduleSegment(object):
-    def __init__(self, _start, _end, _tid, _count, _read, _written, _join, _create, _en):
+    def __init__(self, _start, _end, _tid, _count, _read, _written, _join, _create, _bar, _en):
         self.start = _start
         self.end = _end
         self.tid = _tid
@@ -136,6 +136,7 @@ class ScheduleSegment(object):
         self.written = _written
         self.joined = _join
         self.created = _create
+        self.barrier = _bar
         self.enabled = _en
 
     def __repr__(self):
@@ -148,6 +149,7 @@ class ScheduleSegment(object):
         rep += "written:" + str(self.written) + ", "
         rep += "joined:" + str(self.joined) + ", "
         rep += "created:" + str(self.created) + ", "
+        rep += "barrier:" + str(self.barrier) + ", "
         rep += "enabled:" + str(self.enabled) + ")"
         return rep
 
@@ -157,10 +159,45 @@ class ScheduleSegment(object):
             if x.tid in progress:
                 assert progress[x.tid] == x.start
             progress[x.tid] = x.end
-            assert x.tid in x.enabled
+            en_len = len(x.enabled)
+            if en_len == 1 and x.enabled[0] == "PYTHON_GEN":
+                pass
+            else:
+                assert x.tid in x.enabled
     
     repOK = staticmethod(repOK)
 
+    #remove mention of threads that are never scheduled
+    def sanitize(segmented_schedule):
+        threads = set()
+        for segment in segmented_schedule:
+            threads.add(int(segment.tid))
+
+
+        for segment in segmented_schedule:
+            if segment.created is not None:
+                if int(segment.created) not in threads:
+                    segment.created = None
+            if segment.joined is not None:
+                if int(segment.joined) not in threads:
+                    segment.joined = None
+            i = 0
+            while i < len(segment.enabled):
+                thr = int(segment.enabled[i])
+                if thr not in threads:
+                    del segment.enabled[i]
+                else:
+                    i += 1
+            if segment.barrier is not None:
+                while i < len(segment.barrier):
+                    thr, ev = segment.barrier[i]
+                    thr = int(thr)
+                    if thr not in threads:
+                        del segment.barrier[i]
+                    else:
+                        i += 1
+    
+    sanitize = staticmethod(sanitize)
 
 # represents the sum total schedule of a program execution
 # composed of a list of schedule blocks
@@ -357,35 +394,56 @@ class Schedule(object):
 
         prev_en = ["1"]
         join_dict = {}
+        barrier_dict = {}
+        barrier_next = {}
 
         for event in self.schedule:
+            created = None
+            if "Create" in event.type:
+                created = set(event.enabled) - set(prev_en) 
+                assert len(created) == 1
+                created = list(created)[0]
+
             if event.caller in tid_segment_count:
-                created = None
                 joined = None
-                if "Create" in event.type:
-                    created = set(event.enabled) - set(prev_en) 
-                    assert len(created) == 1
-                    created = list(created)[0]
+                barrier = None
                 if event.caller in join_dict:
                     joined = join_dict[event.caller]
                     join_str = hex(int(joined))
                     assert join_str in next_up_write[event.caller]
                     next_up_write[event.caller] -= set([join_str])
                     del join_dict[event.caller]
+                if event.caller in barrier_next:
+                    barrier = barrier_next[event.caller]
+                    del barrier_next[event.caller]
                 tid_segment_count[event.caller] += 1
                 segmented_schedule.append(ScheduleSegment( \
                         next_up_startid[event.caller], event.addr, \
                     event.caller, tid_segment_count[event.caller], \
                     next_up_read[event.caller], next_up_write[event.caller], \
-                    joined, created, prev_en))
+                    joined, created, barrier, prev_en))
             else:
                 tid_segment_count[event.caller] = 0
                 segmented_schedule.append(ScheduleSegment( \
                         "0x1", event.addr, \
                     event.caller, tid_segment_count[event.caller], \
-                    set(), set(), None, None, prev_en))
+                    set(), set(), None, created, None, prev_en))
+            
+                
+            if "Before_Barrier_Wait" in event.type:
+                barrier_id = event.memory_1
+                assert barrier_id != "0x0"
+                if barrier_id not in barrier_dict:
+                    barrier_dict[barrier_id] = []
+                ev_count = tid_segment_count[event.caller]
+                barrier_dict[barrier_id].append((event.caller, ev_count))
+                if event.caller in event.enabled:
+                    for tid, count in barrier_dict[barrier_id]:
+                        barrier_next[tid] = barrier_dict[barrier_id][:]
+                    barrier_dict[barrier_id] = []
 
-            prev_en = event.enabled
+
+            prev_en = event.enabled[:]
             if "Join" in event.type:
                 assert "0x" in event.memory_1[:2]
                 assert event.memory_2 == "0x0"
@@ -406,15 +464,31 @@ class Schedule(object):
             next_up_startid[event.caller] = event.addr
 
         last = self.schedule[-1]
+        if last.chosen not in tid_segment_count:
+            tid_segment_count[last.chosen] = -1
+        if last.chosen not in next_up_startid:
+            next_up_startid[last.chosen] = "0x1"
+        if last.chosen not in next_up_read:
+            next_up_read[last.chosen] = set()
+        if last.chosen not in next_up_write:
+            next_up_write[last.chosen] = set()
+ 
         tid_segment_count[last.chosen] += 1
         joined = None
+        barrier = None
         if last.chosen in join_dict:
             joined = join_dict[last.chosen]
+
+        if last.chosen in barrier_next:
+            barrier = barrier_next[last.chosen]
+            del barrier_next[last.chosen]
+
         segmented_schedule.append(ScheduleSegment( \
                 next_up_startid[last.chosen], "0x2", \
                 last.chosen, tid_segment_count[last.chosen], \
                 next_up_read[last.chosen], next_up_write[last.chosen], \
-                joined, None, last.enabled))
+                joined, None, barrier, last.enabled))
+        ScheduleSegment.sanitize(segmented_schedule)
         ScheduleSegment.repOK(segmented_schedule)
         return segmented_schedule
     
@@ -425,7 +499,6 @@ class Schedule(object):
             if int(x.tid) == int(threadid):
                 return x.count + 1
         assert False, "thread %s not found!" % str(threadid)
-
 
 
     # -returns a list of tuples:
@@ -500,6 +573,18 @@ class Schedule(object):
                 st = int(x.tid) - t_mod
                 se = int(x.count) + e_mod
                 constraints.append((ft, fe, st, se))
+
+        # Barrier HB
+        for i in range(len(segmented_schedule)):
+            x = segmented_schedule[i]
+            if x.barrier != None:
+                for tid, ev in x.barrier:
+                    ft = int(tid) - t_mod
+                    fe = int(ev) + e_mod
+                    st = int(x.tid) - t_mod
+                    se = int(x.count) + e_mod
+                    constraints.append((ft,fe,st,se))
+
         return constraints
 
     def getInitialSearchStack(self):
@@ -647,7 +732,11 @@ class Schedule(object):
                 self.schedule.append(tmp_point)
                 schedin = schedin[7:]
                 if len(schedin) > 0 and "assert" not in schedin[0]:
-                    assert tmp_point.chosen in tmp_point.enabled
+                    en_size = len(tmp_point.enabled)
+                    if en_size == 1 and "PYTHON_GEN" == tmp_point.enabled[0]:
+                        pass
+                    else:
+                        assert tmp_point.chosen in tmp_point.enabled
             elif "SIGNAL" in item:
                 if len(schedin) < 13:
                     assert len(schedin) > 5
