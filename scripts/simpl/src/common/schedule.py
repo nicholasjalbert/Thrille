@@ -394,56 +394,51 @@ class Schedule(object):
 
         prev_en = ["1"]
         join_dict = {}
-        barrier_dict = {}
-        barrier_next = {}
 
         for event in self.schedule:
+            if event.caller not in tid_segment_count:
+                tid_segment_count[event.caller] = 0
+
+            if event.caller not in next_up_startid:
+                next_up_startid[event.caller] = "0x0"
+
+            if event.caller not in next_up_read:
+                next_up_read[event.caller] = set()
+             
+            if event.caller not in next_up_write:
+                next_up_write[event.caller] = set()
+           
             created = None
-            if "Create" in event.type:
+            if "After_Create" in event.type:
                 created = set(event.enabled) - set(prev_en) 
                 assert len(created) == 1
                 created = list(created)[0]
 
-            if event.caller in tid_segment_count:
-                joined = None
-                barrier = None
-                if event.caller in join_dict:
-                    joined = join_dict[event.caller]
-                    join_str = hex(int(joined))
-                    assert join_str in next_up_write[event.caller]
-                    next_up_write[event.caller] -= set([join_str])
-                    del join_dict[event.caller]
-                if event.caller in barrier_next:
-                    barrier = barrier_next[event.caller]
-                    del barrier_next[event.caller]
-                tid_segment_count[event.caller] += 1
-                segmented_schedule.append(ScheduleSegment( \
-                        next_up_startid[event.caller], event.addr, \
-                    event.caller, tid_segment_count[event.caller], \
-                    next_up_read[event.caller], next_up_write[event.caller], \
-                    joined, created, barrier, prev_en))
-            else:
-                tid_segment_count[event.caller] = 0
-                segmented_schedule.append(ScheduleSegment( \
-                        "0x1", event.addr, \
-                    event.caller, tid_segment_count[event.caller], \
-                    set(), set(), None, created, None, prev_en))
-            
-                
+            barrier = None
             if "Before_Barrier_Wait" in event.type:
                 barrier_id = event.memory_1
                 assert barrier_id != "0x0"
-                if barrier_id not in barrier_dict:
-                    barrier_dict[barrier_id] = []
-                ev_count = tid_segment_count[event.caller]
-                barrier_dict[barrier_id].append((event.caller, ev_count))
-                if event.caller in event.enabled:
-                    for tid, count in barrier_dict[barrier_id]:
-                        barrier_next[tid] = barrier_dict[barrier_id][:]
-                    barrier_dict[barrier_id] = []
+                next_up_write[event.caller].add(barrier_id)
 
+            joined = None
+            if event.caller in join_dict:
+                joined = join_dict[event.caller]
+                join_str = hex(int(joined))
+                assert join_str in next_up_write[event.caller]
+                next_up_write[event.caller] -= set([join_str])
+                del join_dict[event.caller]
+
+            segmented_schedule.append(ScheduleSegment( \
+                    next_up_startid[event.caller], event.addr, \
+                    event.caller, tid_segment_count[event.caller], \
+                    next_up_read[event.caller], next_up_write[event.caller], \
+                    joined, created, barrier, prev_en))
+            
 
             prev_en = event.enabled[:]
+            tid_segment_count[event.caller] += 1
+            next_up_startid[event.caller] = event.addr
+
             if "Join" in event.type:
                 assert "0x" in event.memory_1[:2]
                 assert event.memory_2 == "0x0"
@@ -461,7 +456,6 @@ class Schedule(object):
             else:
                 next_up_read[event.caller] = set()
                 next_up_write[event.caller] = set()
-            next_up_startid[event.caller] = event.addr
 
         last = self.schedule[-1]
         if last.chosen not in tid_segment_count:
@@ -473,15 +467,15 @@ class Schedule(object):
         if last.chosen not in next_up_write:
             next_up_write[last.chosen] = set()
  
-        tid_segment_count[last.chosen] += 1
         joined = None
-        barrier = None
         if last.chosen in join_dict:
             joined = join_dict[last.chosen]
-
-        if last.chosen in barrier_next:
-            barrier = barrier_next[last.chosen]
-            del barrier_next[last.chosen]
+            join_str = hex(int(joined))
+            assert join_str in next_up_write[last.chosen]
+            next_up_write[last.chosen] -= set([join_str])
+            del join_dict[last.chosen]
+        
+        barrier = None
 
         segmented_schedule.append(ScheduleSegment( \
                 next_up_startid[last.chosen], "0x2", \
@@ -490,6 +484,9 @@ class Schedule(object):
                 joined, None, barrier, last.enabled))
         ScheduleSegment.sanitize(segmented_schedule)
         ScheduleSegment.repOK(segmented_schedule)
+        #for x in segmented_schedule:
+        #    print x
+        #sys.exit(0)
         return segmented_schedule
     
     def countThreadEvents(self, threadid):
@@ -578,7 +575,7 @@ class Schedule(object):
         for i in range(len(segmented_schedule)):
             x = segmented_schedule[i]
             if x.barrier != None:
-                for tid, ev in x.barrier:
+                    tid, ev = x.barrier
                     ft = int(tid) - t_mod
                     fe = int(ev) + e_mod
                     st = int(x.tid) - t_mod
@@ -623,7 +620,6 @@ class Schedule(object):
             tmp = []
             if thread in signals:
                 if eid in signals[thread]:
-                    print "HEREEEEEEE"
                     tmp.append("signalled:%s" % str(signals[thread][eid]))
                     tmp.append("caller:%s" % str(thread))
                     tmp.append("idaddr:0x99999999")
