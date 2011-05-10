@@ -168,6 +168,7 @@ class ScheduleSegment(object):
     repOK = staticmethod(repOK)
 
     #remove mention of threads that are never scheduled
+    #TODO: might be a mess if thread 7 out of 10 is never scheduled
     def sanitize(segmented_schedule):
         threads = set()
         for segment in segmented_schedule:
@@ -459,7 +460,7 @@ class Schedule(object):
 
         last = self.schedule[-1]
         if last.chosen not in tid_segment_count:
-            tid_segment_count[last.chosen] = -1
+            tid_segment_count[last.chosen] = 0
         if last.chosen not in next_up_startid:
             next_up_startid[last.chosen] = "0x1"
         if last.chosen not in next_up_read:
